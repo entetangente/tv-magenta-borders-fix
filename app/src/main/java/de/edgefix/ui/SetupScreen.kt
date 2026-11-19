@@ -178,9 +178,15 @@ private fun ColumnScope.PermissionStep(onNext: () -> Unit) {
                 busy = true
                 status = "Verbinde mit dem Fire TV …"
                 scope.launch {
-                    val r = AdbSelfGrant.run(context) {
-                        status = "Verbunden. Falls „USB-Debugging zulassen?“ erscheint: „Immer zulassen“ ankreuzen und OK."
-                    }
+                    val r = AdbSelfGrant.run(
+                        context,
+                        onWaitingForConfirm = {
+                            status = "Verbunden. Falls „USB-Debugging zulassen?“ erscheint: „Immer zulassen“ ankreuzen und OK."
+                        },
+                        onRetry = { n ->
+                            status = "Verbindung wurde getrennt, neuer Versuch (${n + 1}) … Falls die Abfrage erscheint: „Immer zulassen“ und OK."
+                        },
+                    )
                     busy = false
                     status = when (r) {
                         AdbSelfGrant.Result.Success -> null
