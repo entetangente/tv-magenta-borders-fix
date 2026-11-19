@@ -99,6 +99,11 @@ fun CalibrationScreen(repo: SettingsRepository) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(20.dp)) {
             ScreenTitle("Mit Handy kalibrieren")
             when {
+                !OverlayPermission.granted(context) -> Text(
+                    "Die Berechtigung „Über anderen Apps anzeigen“ fehlt. Ohne sie kann EdgeFix keine Korrektur anzeigen. " +
+                        "Bitte zuerst unter Einstellungen → Berechtigung einrichten.",
+                    fontSize = 24.sp, color = Color(0xFFFF7A6B),
+                )
                 error != null -> Text(error!!, fontSize = 24.sp, color = Color(0xFFFF7A6B))
                 ip == null -> Text(
                     "Keine Netzwerkverbindung gefunden. Der Fire TV muss im selben WLAN sein wie das Handy.",
@@ -126,7 +131,7 @@ fun CalibrationScreen(repo: SettingsRepository) {
             BigButton("Fertig", { (context as? android.app.Activity)?.onBackPressed() }, Modifier.focusRequester(focus), primary = false)
             KeyHints("Zurück: Kalibrierung beenden")
         }
-        if (ip != null && server != null) {
+        if (ip != null && server != null && OverlayPermission.granted(context)) {
             val qr = remember(server) { qrBitmap("http://$ip:${CalibrationServer.PORT}/?t=${server!!.token}").asImageBitmap() }
             Box(Modifier.background(Color.White, RoundedCornerShape(16.dp)).padding(16.dp)) {
                 Image(qr, contentDescription = "QR-Code", modifier = Modifier.size(360.dp), filterQuality = FilterQuality.None)

@@ -54,8 +54,8 @@ fun SetupScreen(
         if (step > 0 && step != startStep) step-- else onExit?.invoke()
     }
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 80.dp, vertical = 48.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp),
+        Modifier.fillMaxSize().padding(horizontal = 72.dp, vertical = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
             "Einrichtung · Schritt ${step + 1} von $STEPS",
@@ -132,40 +132,61 @@ private fun ColumnScope.PermissionStep(onNext: () -> Unit) {
         return
     }
 
-    val steps = listOf(
-        "Einstellungen → Mein Fire TV → Info öffnen.",
-        "Siebenmal auf den Gerätenamen (z. B. „Fire TV Stick“) klicken, bis „Du bist jetzt Entwickler“ erscheint.",
-        "Zurück → Entwickleroptionen → ADB-Debugging einschalten.",
-        "Hierher zurückkehren und „Jetzt einrichten“ wählen.",
-        "Am Fernseher erscheint „Debugging zulassen?“: Haken bei „Immer zulassen“ setzen und OK.",
-    )
-    LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        items(steps.size) { i ->
-            Row {
-                Text("${i + 1}.", fontSize = 24.sp, color = Accent, modifier = Modifier.width(40.dp))
-                Text(steps[i], fontSize = 24.sp)
+    // ADB-Debugging an/aus lässt sich ohne Berechtigung auslesen.
+    var adbOn by remember { mutableStateOf(adbEnabled(context)) }
+    LaunchedEffect(Unit) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                adbOn = adbEnabled(context)
+                kotlinx.coroutines.delay(1000)
             }
         }
-        if (status != null) {
-            item { Text(status!!, fontSize = 24.sp, color = Accent, modifier = Modifier.padding(top = 12.dp)) }
+    }
+
+    val steps = listOf(
+        "Einstellungen → Mein Fire TV → Info: 7× schnell auf den Gerätenamen klicken.",
+        "Zurück → Entwickleroptionen → ADB-Debugging einschalten.",
+        "Hierher zurück und „Jetzt einrichten“ wählen.",
+        "„USB-Debugging zulassen?“: Haken bei „Immer zulassen“, dann OK.",
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        steps.forEachIndexed { i, t ->
+            Row {
+                Text("${i + 1}.", fontSize = 21.sp, color = Accent, modifier = Modifier.width(34.dp))
+                Text(t, fontSize = 21.sp)
+            }
         }
     }
+    // Statuszeilen stehen fest über den Knöpfen, damit sie immer sichtbar sind.
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            if (adbOn) "✓  ADB-Debugging ist eingeschaltet" else "✗  ADB-Debugging ist aus (Schritte 1 und 2)",
+            fontSize = 22.sp,
+            color = if (adbOn) Accent else androidx.compose.ui.graphics.Color(0xFFF0B35A),
+        )
+        if (status != null) {
+            Text(status!!, fontSize = 22.sp, color = androidx.compose.ui.graphics.Color(0xFFF0B35A))
+        }
+    }
+    Spacer(Modifier.weight(1f))
     Row(horizontalArrangement = Arrangement.spacedBy(20.dp), modifier = Modifier.fillMaxWidth()) {
         BigButton(
             if (busy) "Bitte warten …" else "Jetzt einrichten",
-            enabled = !busy,
             modifier = Modifier.focusRequester(focus),
             onClick = {
+                if (busy) return@BigButton
                 busy = true
                 status = "Verbinde mit dem Fire TV …"
                 scope.launch {
                     val r = AdbSelfGrant.run(context) {
-                        status = "Falls „Debugging zulassen?“ erscheint: „Immer zulassen“ ankreuzen und OK drücken."
+                        status = "Verbunden. Falls „USB-Debugging zulassen?“ erscheint: „Immer zulassen“ ankreuzen und OK."
                     }
                     busy = false
                     status = when (r) {
                         AdbSelfGrant.Result.Success -> null
-                        AdbSelfGrant.Result.AdbOff -> "ADB-Debugging ist noch aus. Bitte Schritte 1–3 ausführen."
+                        AdbSelfGrant.Result.AdbOff ->
+                            if (adbEnabled(context)) "ADB ist an, aber nicht erreichbar (Port 5555). Bitte ADB-Debugging einmal aus- und wieder einschalten."
+                            else "ADB-Debugging ist noch aus. Bitte Schritte 1 und 2 ausführen."
                         AdbSelfGrant.Result.NotAuthorized -> "Die Abfrage am Fernseher wurde nicht bestätigt. Bitte erneut versuchen."
                         is AdbSelfGrant.Result.Failed -> "Hat nicht geklappt: ${r.message}"
                     }
@@ -175,10 +196,8 @@ private fun ColumnScope.PermissionStep(onNext: () -> Unit) {
         )
         // Kein Knopf für den Systemdialog „Über anderen Apps anzeigen“: Fire OS
         // meldet ihn zwar als vorhanden, er tut dort aber nichts.
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(20.dp), modifier = Modifier.fillMaxWidth()) {
         BigButton(
-            "Fire-TV-Einstellungen",
+            "Einstellungen",
             primary = false,
             onClick = {
                 context.tryStart(
@@ -191,6 +210,9 @@ private fun ColumnScope.PermissionStep(onNext: () -> Unit) {
         BigButton("Überspringen", primary = false, onClick = onNext)
     }
 }
+
+private fun adbEnabled(context: Context): Boolean =
+    runCatching { Settings.Global.getInt(context.contentResolver, Settings.Global.ADB_ENABLED, 0) == 1 }.getOrDefault(false)
 
 @Composable
 private fun ColumnScope.TvCheckStep(onNext: () -> Unit) {

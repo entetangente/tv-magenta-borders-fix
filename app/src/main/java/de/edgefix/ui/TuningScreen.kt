@@ -147,6 +147,13 @@ fun TuningScreen(repo: SettingsRepository) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("Feinabstimmung", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            if (!de.edgefix.overlay.OverlayPermission.granted(androidx.compose.ui.platform.LocalContext.current)) {
+                Text(
+                    "Berechtigung fehlt: Die Korrektur wird nicht angezeigt. Einstellungen → Berechtigung einrichten.",
+                    fontSize = 20.sp,
+                    color = Color(0xFFFF7A6B),
+                )
+            }
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (settings.activeMapId != null) {
                     item {
