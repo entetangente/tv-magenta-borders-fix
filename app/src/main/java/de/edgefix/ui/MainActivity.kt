@@ -1,0 +1,76 @@
+package de.edgefix.ui
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.tv.material3.MaterialTheme
+import de.edgefix.overlay.OverlayService
+import de.edgefix.store.SettingsRepository
+
+enum class Screen { SETUP, HOME, TUNING, SETTINGS }
+
+class MainActivity : ComponentActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val repo = SettingsRepository.get(this)
+        setContent {
+            EdgeFixTheme {
+                val settings by repo.settings.collectAsStateWithLifecycle()
+                var screen by rememberSaveable {
+                    mutableStateOf(if (settings.setupDone) Screen.HOME else Screen.SETUP)
+                }
+                var setupStartStep by rememberSaveable { mutableStateOf(0) }
+                BackHandler(enabled = screen == Screen.TUNING || screen == Screen.SETTINGS) {
+                    screen = Screen.HOME
+                }
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                    when (screen) {
+                        Screen.SETUP -> SetupScreen(
+                            repo = repo,
+                            startStep = setupStartStep,
+                            onDone = {
+                                repo.update { it.copy(setupDone = true) }
+                                OverlayService.sync(this@MainActivity)
+                                screen = Screen.HOME
+                            },
+                            onExit = if (settings.setupDone) ({ screen = Screen.SETTINGS }) else null,
+                        )
+                        Screen.HOME -> HomeScreen(
+                            repo = repo,
+                            onTuning = { screen = Screen.TUNING },
+                            onSettings = { screen = Screen.SETTINGS },
+                        )
+                        Screen.TUNING -> TuningScreen(repo = repo)
+                        Screen.SETTINGS -> SettingsScreen(
+                            repo = repo,
+                            onPermission = { setupStartStep = 1; screen = Screen.SETUP },
+                            onRestartSetup = { setupStartStep = 0; screen = Screen.SETUP },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Nach Rückkehr aus den Systemeinstellungen: Dienst passend starten.
+        if (SettingsRepository.get(this).settings.value.setupDone) OverlayService.sync(this)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        SettingsRepository.get(this).setBypass(false)
+    }
+}
