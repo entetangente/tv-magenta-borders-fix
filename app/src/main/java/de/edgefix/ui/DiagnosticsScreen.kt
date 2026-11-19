@@ -45,8 +45,8 @@ fun DiagnosticsScreen(repo: SettingsRepository) {
         }
     }
 
-    Row(Modifier.fillMaxSize().padding(horizontal = 56.dp, vertical = 36.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
-        Column(Modifier.width(560.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Row(Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 32.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+        Column(Modifier.width(340.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             ScreenTitle("Diagnose")
             ToggleRow(
                 "Roten Testrahmen zeigen",
@@ -55,7 +55,7 @@ fun DiagnosticsScreen(repo: SettingsRepository) {
                     repo.setTestFrame(!testFrame)
                     OverlayService.sync(context)
                 },
-                description = "Muss sofort als roter Rand um das ganze Bild erscheinen",
+                description = "Erscheint sofort als roter Rand",
                 modifier = Modifier.focusRequester(focus),
             )
             ActionRow("Dienst neu starten", {
@@ -67,10 +67,11 @@ fun DiagnosticsScreen(repo: SettingsRepository) {
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             fun line(label: String, value: String, ok: Boolean? = null) = item {
                 Row {
-                    Text(label, fontSize = 20.sp, modifier = Modifier.width(260.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(label, fontSize = 18.sp, modifier = Modifier.width(200.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(
                         value,
-                        fontSize = 20.sp,
+                        fontSize = 18.sp,
+                        modifier = Modifier.weight(1f),
                         color = when (ok) {
                             true -> Accent
                             false -> androidx.compose.ui.graphics.Color(0xFFFF7A6B)
