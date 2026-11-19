@@ -65,6 +65,7 @@ fun TuningScreen(repo: SettingsRepository) {
     val settings by repo.settings.collectAsStateWithLifecycle()
     val bypass by repo.bypass.collectAsStateWithLifecycle()
     val p = settings.params
+    val useMap = settings.useMap && settings.activeMapId != null
     var pattern by rememberSaveable { mutableStateOf(TestPattern.WHITE) }
     var expert by rememberSaveable { mutableStateOf(false) }
     var panelHidden by rememberSaveable { mutableStateOf(false) }
@@ -147,18 +148,44 @@ fun TuningScreen(repo: SettingsRepository) {
         ) {
             Text("Feinabstimmung", fontSize = 28.sp, fontWeight = FontWeight.Bold)
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                item {
-                    ValueRow(
-                        "Stärke", pct(p.aMax), p.aMax / EdgeParams.MAX_A,
-                        { d -> set { it.copy(aMax = it.aMax.stepTo(d, 0.01f, 0f, EdgeParams.MAX_A)) } },
-                        Modifier.focusRequester(firstFocus),
-                    )
+                if (settings.activeMapId != null) {
+                    item {
+                        ChoiceRow(
+                            "Korrektur", listOf(true, false), settings.useMap,
+                            { if (it) "Gemessen" else "Einfache Randmaske" },
+                            { v -> repo.update { it.copy(useMap = v) } },
+                        )
+                    }
                 }
-                item {
-                    ValueRow(
-                        "Schutz für dunkle Szenen", pct(1f - p.k), 1f - p.k,
-                        { d -> set { it.copy(k = (1f - (1f - it.k).stepTo(d, 0.05f, 0f, 1f))) } },
-                    )
+                if (useMap) {
+                    item {
+                        ValueRow(
+                            "Stärke", pct(settings.mapStrength), settings.mapStrength / 1.5f,
+                            { d -> repo.update { it.copy(mapStrength = it.mapStrength.stepTo(d, 0.05f, 0f, 1.5f)) } },
+                            Modifier.focusRequester(firstFocus),
+                        )
+                    }
+                    item {
+                        ChoiceRow(
+                            "Schutz für dunkle Szenen", listOf(0, 1, 2), settings.mapVariant,
+                            { listOf("niedrig", "mittel", "hoch")[it] },
+                            { v -> repo.update { it.copy(mapVariant = v) } },
+                        )
+                    }
+                } else {
+                    item {
+                        ValueRow(
+                            "Stärke", pct(p.aMax), p.aMax / EdgeParams.MAX_A,
+                            { d -> set { it.copy(aMax = it.aMax.stepTo(d, 0.01f, 0f, EdgeParams.MAX_A)) } },
+                            Modifier.focusRequester(firstFocus),
+                        )
+                    }
+                    item {
+                        ValueRow(
+                            "Schutz für dunkle Szenen", pct(1f - p.k), 1f - p.k,
+                            { d -> set { it.copy(k = (1f - (1f - it.k).stepTo(d, 0.05f, 0f, 1f))) } },
+                        )
+                    }
                 }
                 item {
                     ChoiceRow("Testbild", TestPattern.entries, pattern, { it.label }, { pattern = it })
@@ -166,10 +193,10 @@ fun TuningScreen(repo: SettingsRepository) {
                 item {
                     ActionRow("Bedienfeld ausblenden", { panelHidden = true }, description = "Beliebige Taste blendet es wieder ein")
                 }
-                item {
+                if (!useMap) item {
                     ToggleRow("Experte", expert, { expert = !expert }, description = "Farbton, Randbreiten, Verlauf")
                 }
-                if (expert) {
+                if (expert && !useMap) {
                     item {
                         ValueRow(
                             "Farbton", "${p.hueDeg.roundToInt()}° ${hueName(p.hueDeg)}", p.hueDeg / 360f,

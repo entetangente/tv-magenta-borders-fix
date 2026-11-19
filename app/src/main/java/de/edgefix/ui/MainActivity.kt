@@ -17,7 +17,7 @@ import androidx.tv.material3.MaterialTheme
 import de.edgefix.overlay.OverlayService
 import de.edgefix.store.SettingsRepository
 
-enum class Screen { SETUP, HOME, TUNING, SETTINGS }
+enum class Screen { SETUP, HOME, TUNING, SETTINGS, CALIBRATION }
 
 class MainActivity : ComponentActivity() {
 
@@ -31,7 +31,7 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf(if (settings.setupDone) Screen.HOME else Screen.SETUP)
                 }
                 var setupStartStep by rememberSaveable { mutableStateOf(0) }
-                BackHandler(enabled = screen == Screen.TUNING || screen == Screen.SETTINGS) {
+                BackHandler(enabled = screen == Screen.TUNING || screen == Screen.SETTINGS || screen == Screen.CALIBRATION) {
                     screen = Screen.HOME
                 }
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -49,9 +49,11 @@ class MainActivity : ComponentActivity() {
                         Screen.HOME -> HomeScreen(
                             repo = repo,
                             onTuning = { screen = Screen.TUNING },
+                            onCalibrate = { screen = Screen.CALIBRATION },
                             onSettings = { screen = Screen.SETTINGS },
                         )
                         Screen.TUNING -> TuningScreen(repo = repo)
+                        Screen.CALIBRATION -> CalibrationScreen(repo = repo)
                         Screen.SETTINGS -> SettingsScreen(
                             repo = repo,
                             onPermission = { setupStartStep = 1; screen = Screen.SETUP },

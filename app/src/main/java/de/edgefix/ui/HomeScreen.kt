@@ -40,7 +40,7 @@ import java.util.Date
 private const val THREE_MONTHS_MS = 90L * 24 * 60 * 60 * 1000
 
 @Composable
-fun HomeScreen(repo: SettingsRepository, onTuning: () -> Unit, onSettings: () -> Unit) {
+fun HomeScreen(repo: SettingsRepository, onTuning: () -> Unit, onCalibrate: () -> Unit, onSettings: () -> Unit) {
     val context = LocalContext.current
     val settings by repo.settings.collectAsStateWithLifecycle()
     val running by OverlayService.running.collectAsStateWithLifecycle()
@@ -88,14 +88,18 @@ fun HomeScreen(repo: SettingsRepository, onTuning: () -> Unit, onSettings: () ->
                     Text(
                         when {
                             !hasPermission -> "Unter Einstellungen → Berechtigung einrichten"
-                            settings.lastTuned == 0L -> "Noch nicht abgestimmt. Starte mit der Feinabstimmung."
-                            else -> "Zuletzt abgestimmt: " +
+                            settings.useMap && settings.lastCalibrated != 0L -> "Gemessene Korrektur vom " +
+                                DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(settings.lastCalibrated))
+                            settings.lastTuned == 0L -> "Noch nicht abgestimmt. Starte mit der Kalibrierung."
+                            else -> "Einfache Randmaske, zuletzt abgestimmt: " +
                                 DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(settings.lastTuned))
                         },
                         fontSize = 22.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    if (settings.lastTuned != 0L && System.currentTimeMillis() - settings.lastTuned > THREE_MONTHS_MS) {
+                    if (settings.useMap && settings.lastCalibrated != 0L &&
+                        System.currentTimeMillis() - settings.lastCalibrated > THREE_MONTHS_MS
+                    ) {
                         Text("Neu messen empfohlen", fontSize = 22.sp, color = Accent)
                     }
                 }
@@ -105,7 +109,7 @@ fun HomeScreen(repo: SettingsRepository, onTuning: () -> Unit, onSettings: () ->
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.fillMaxWidth()) {
-            Tile("Mit Handy kalibrieren", "Kommt in der nächsten Version", Modifier.weight(1f), enabled = false) {}
+            Tile("Mit Handy kalibrieren", "Rand messen und genau ausgleichen", Modifier.weight(1f), onClick = onCalibrate)
             Tile("Feinabstimmung", "Stärke und Farbe am Fernseher einstellen", Modifier.weight(1f), onClick = onTuning)
             Tile("Einstellungen", "Autostart, Berechtigung, Zurücksetzen", Modifier.weight(1f), onClick = onSettings)
         }

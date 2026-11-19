@@ -15,6 +15,16 @@ data class Settings(
     /** Zeitpunkt der letzten Kalibrierung oder Feinabstimmung (ms), 0 = nie. */
     val lastTuned: Long = 0L,
     val params: EdgeParams = EdgeParams(),
+    /** Gemessene Karte statt parametrischer Randmaske verwenden. */
+    val useMap: Boolean = false,
+    /** Kennung der aktiven gespeicherten Karte. */
+    val activeMapId: String? = null,
+    /** Stärke der Karte (1 = wie berechnet), 0–1.5. */
+    val mapStrength: Float = 1f,
+    /** Schutz für dunkle Szenen: 0 niedrig, 1 mittel, 2 hoch. */
+    val mapVariant: Int = 1,
+    /** Zeitpunkt der letzten Kalibrierung mit dem Handy (ms), 0 = nie. */
+    val lastCalibrated: Long = 0L,
 )
 
 object SettingsJson {
@@ -25,6 +35,11 @@ object SettingsJson {
         put("setupDone", s.setupDone)
         put("lastTuned", s.lastTuned)
         put("params", encodeParams(s.params))
+        put("useMap", s.useMap)
+        put("activeMapId", s.activeMapId ?: JSONObject.NULL)
+        put("mapStrength", s.mapStrength.toDouble())
+        put("mapVariant", s.mapVariant)
+        put("lastCalibrated", s.lastCalibrated)
     }.toString()
 
     fun decode(json: String?): Settings {
@@ -37,6 +52,11 @@ object SettingsJson {
                 setupDone = o.optBoolean("setupDone", false),
                 lastTuned = o.optLong("lastTuned", 0L),
                 params = o.optJSONObject("params")?.let(::decodeParams) ?: EdgeParams(),
+                useMap = o.optBoolean("useMap", false),
+                activeMapId = if (o.isNull("activeMapId")) null else o.optString("activeMapId", "").ifEmpty { null },
+                mapStrength = o.optDouble("mapStrength", 1.0).toFloat().coerceIn(0f, 1.5f),
+                mapVariant = o.optInt("mapVariant", 1).coerceIn(0, 2),
+                lastCalibrated = o.optLong("lastCalibrated", 0L),
             )
         } catch (e: Exception) {
             Settings()

@@ -227,8 +227,8 @@ private fun ColumnScope.DoneStep(onDone: () -> Unit) {
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     ScreenTitle("Fertig eingerichtet")
     Text(
-        "Die Korrektur läuft jetzt mit Startwerten. Unter „Feinabstimmung“ passt du Stärke und Farbe an deinen Fernseher an. " +
-            "Die Kalibrierung mit dem Handy folgt in der nächsten Version.",
+        "Die Korrektur läuft jetzt mit einer einfachen Randmaske. Am genauesten wird es mit „Mit Handy kalibrieren“ " +
+            "auf dem Startbildschirm. Ohne Handy passt du Stärke und Farbe unter „Feinabstimmung“ an.",
         fontSize = 26.sp,
     )
     Spacer(Modifier.weight(1f))

@@ -20,6 +20,19 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Web-App bauen und testen
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+          npm test
+
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Tests

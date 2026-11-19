@@ -73,6 +73,9 @@ dependencies {
     implementation(libs.tv.material)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.dadb)
+    implementation(libs.nanohttpd)
+    implementation(libs.nanohttpd.websocket)
+    implementation(libs.zxing.core)
 
     testImplementation(libs.junit)
 }

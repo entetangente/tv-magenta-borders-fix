@@ -7,3 +7,5 @@ build/
 captures/
 .kotlin/
 node_modules/
+test-output/
+/app/src/main/assets/web/

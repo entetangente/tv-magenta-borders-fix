@@ -142,8 +142,7 @@ object EdgeMaskRenderer {
         return px
     }
 
-    @PublishedApi
-    internal fun q(v: Float, d: Float, max: Int): Int {
+    fun q(v: Float, d: Float, max: Int): Int {
         val r = floor(v * 255f + 0.5f + d).toInt()
         return if (r < 0) 0 else if (r > max) max else r
     }

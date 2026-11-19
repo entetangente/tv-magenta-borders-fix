@@ -19,6 +19,14 @@ class SettingsRepository private constructor(context: Context) {
     private val _bypass = MutableStateFlow(false)
     val bypass: StateFlow<Boolean> = _bypass.asStateFlow()
 
+    /** Zustand während der Kalibrierung mit dem Handy, sonst null. Wird nicht gespeichert. */
+    private val _calibration = MutableStateFlow<CalibrationState?>(null)
+    val calibration: StateFlow<CalibrationState?> = _calibration.asStateFlow()
+
+    fun updateCalibration(transform: (CalibrationState?) -> CalibrationState?) {
+        _calibration.update(transform)
+    }
+
     fun update(transform: (Settings) -> Settings) {
         _settings.update(transform)
         prefs.edit().putString(KEY, SettingsJson.encode(_settings.value)).apply()
@@ -39,4 +47,30 @@ class SettingsRepository private constructor(context: Context) {
                 instance ?: SettingsRepository(context).also { instance = it }
             }
     }
+}
+
+/** Was das Overlay während der Kalibrierung zeigt. */
+enum class CalibrationOverlay {
+    /** gar nichts (Rohmessung) */
+    OFF,
+    /** die gerade berechnete, noch nicht übernommene Karte */
+    PREVIEW,
+    /** die normale, gespeicherte Korrektur */
+    ACTIVE,
+}
+
+data class CalibrationState(
+    val overlay: CalibrationOverlay = CalibrationOverlay.ACTIVE,
+    /** Grauwert des Messbilds (0–1) oder null = kein Messbild */
+    val level: Float? = null,
+    val hint: String? = null,
+    val phoneConnected: Boolean = false,
+    val stepText: String? = null,
+    val previewBytes: ByteArray? = null,
+    val previewMap: de.edgefix.core.CorrectionMap? = null,
+    val previewStrength: Float = 1f,
+    val previewVariant: Int = 1,
+) {
+    override fun equals(other: Any?): Boolean = this === other
+    override fun hashCode(): Int = System.identityHashCode(this)
 }

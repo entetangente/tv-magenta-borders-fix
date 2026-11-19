@@ -1,0 +1,43 @@
+:root {
+  --bg: #101214;
+  --card: #1b1e22;
+  --text: #e8eaed;
+  --muted: #a6adb5;
+  --accent: #8bd17c;
+  --warn: #f0b35a;
+  --err: #ff7a6b;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.45 -apple-system, system-ui, Segoe UI, Roboto, sans-serif; }
+body { min-height: 100dvh; display: flex; flex-direction: column; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; }
+.brand { font-weight: 700; letter-spacing: .02em; }
+.dots { display: flex; gap: 6px; }
+.dots span { width: 8px; height: 8px; border-radius: 50%; background: #3a3f45; }
+.dots span.on { background: var(--accent); }
+main { flex: 1; display: flex; flex-direction: column; padding: 8px 20px 20px; gap: 16px; max-width: 560px; width: 100%; margin: 0 auto; }
+h1 { font-size: 26px; margin: 8px 0 0; line-height: 1.2; }
+p { margin: 0; color: var(--muted); }
+.card { background: var(--card); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.spacer { flex: 1; }
+button { font: inherit; border: 0; border-radius: 14px; padding: 16px 18px; background: #2a2f35; color: var(--text); cursor: pointer; }
+button.primary { background: var(--accent); color: #0e1a0b; font-weight: 650; font-size: 19px; padding: 18px; }
+button:disabled { opacity: .45; }
+.row { display: flex; gap: 10px; }
+.row > * { flex: 1; }
+label.check { display: flex; gap: 12px; align-items: center; padding: 12px; background: var(--card); border-radius: 12px; }
+label.check input { width: 24px; height: 24px; accent-color: var(--accent); }
+.ok { color: var(--accent); font-weight: 600; }
+.warn { color: var(--warn); }
+.err { color: var(--err); }
+.big { font-size: 44px; text-align: center; }
+.progress { height: 8px; background: #2a2f35; border-radius: 4px; overflow: hidden; }
+.progress > div { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+.seg { display: flex; background: #2a2f35; border-radius: 12px; padding: 4px; }
+.seg button { flex: 1; padding: 10px; background: transparent; border-radius: 9px; }
+.seg button.on { background: var(--accent); color: #0e1a0b; font-weight: 600; }
+input[type=range] { width: 100%; accent-color: var(--accent); height: 32px; }
+.slider-label { display: flex; justify-content: space-between; }
+.thumb { width: 100%; border-radius: 10px; }
+small { color: var(--muted); }

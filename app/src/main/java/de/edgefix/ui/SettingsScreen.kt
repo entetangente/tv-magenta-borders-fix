@@ -22,6 +22,7 @@ import de.edgefix.BuildConfig
 import de.edgefix.core.EdgeParams
 import de.edgefix.overlay.OverlayPermission
 import de.edgefix.overlay.OverlayService
+import de.edgefix.store.MapStore
 import de.edgefix.store.SettingsRepository
 
 @Composable
@@ -30,6 +31,7 @@ fun SettingsScreen(repo: SettingsRepository, onPermission: () -> Unit, onRestart
     val settings by repo.settings.collectAsStateWithLifecycle()
     val granted = remember { OverlayPermission.granted(context) }
     var confirmReset by remember { mutableStateOf(false) }
+    val maps = remember { MapStore(context).list() }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 
@@ -48,6 +50,25 @@ fun SettingsScreen(repo: SettingsRepository, onPermission: () -> Unit, onRestart
                     modifier = Modifier.focusRequester(focus),
                 )
             }
+            if (maps.isNotEmpty()) {
+                item {
+                    ChoiceRow(
+                        "Gespeicherte Kalibrierung",
+                        maps.map { it.id },
+                        settings.activeMapId ?: maps.first().id,
+                        { id -> maps.firstOrNull { it.id == id }?.label ?: id },
+                        { id -> repo.update { it.copy(activeMapId = id, useMap = true) } },
+                    )
+                }
+                item {
+                    ToggleRow(
+                        "Gemessene Korrektur verwenden",
+                        settings.useMap,
+                        { repo.update { it.copy(useMap = !it.useMap) } },
+                        description = "Aus: einfache Randmaske aus der Feinabstimmung",
+                    )
+                }
+            }
             item {
                 ActionRow(
                     if (granted) "Berechtigung: eingerichtet ✓" else "Berechtigung einrichten",
@@ -60,7 +81,7 @@ fun SettingsScreen(repo: SettingsRepository, onPermission: () -> Unit, onRestart
                     if (confirmReset) "Wirklich zurücksetzen? OK zum Bestätigen" else "Abstimmung zurücksetzen",
                     {
                         if (confirmReset) {
-                            repo.update { it.copy(params = EdgeParams(), lastTuned = 0L) }
+                            repo.update { it.copy(params = EdgeParams(), lastTuned = 0L, mapStrength = 1f, mapVariant = 1) }
                             OverlayService.sync(context)
                             confirmReset = false
                         } else {
@@ -72,7 +93,7 @@ fun SettingsScreen(repo: SettingsRepository, onPermission: () -> Unit, onRestart
             }
             item { ActionRow("Ersteinrichtung erneut starten", onRestartSetup) }
             item {
-                ActionRow("Version ${BuildConfig.VERSION_NAME}", {}, description = "Profile (SDR/HDR) folgen in einer späteren Version")
+                ActionRow("Version ${BuildConfig.VERSION_NAME}", {}, description = "Profile (SDR/HDR) folgen in Stufe 3")
             }
         }
         KeyHints("OK: auswählen · Zurück: Startbildschirm")

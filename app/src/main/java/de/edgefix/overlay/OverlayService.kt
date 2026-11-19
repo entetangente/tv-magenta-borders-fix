@@ -21,7 +21,14 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import de.edgefix.R
+import de.edgefix.core.CorrectionMap
+import de.edgefix.core.CorrectionMapRenderer
 import de.edgefix.core.EdgeMaskRenderer
+import de.edgefix.core.EdgeParams
+import de.edgefix.store.CalibrationOverlay
+import de.edgefix.store.CalibrationState
+import de.edgefix.store.MapStore
+import de.edgefix.store.Settings
 import de.edgefix.store.SettingsRepository
 import de.edgefix.ui.MainActivity
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +50,7 @@ import kotlinx.coroutines.withContext
 class OverlayService : LifecycleService() {
 
     private lateinit var repo: SettingsRepository
+    private lateinit var mapStore: MapStore
     private lateinit var wm: WindowManager
     private var view: OverlayView? = null
     private val size = MutableStateFlow<Pair<Int, Int>?>(null)
@@ -57,6 +65,7 @@ class OverlayService : LifecycleService() {
     override fun onCreate() {
         super.onCreate()
         repo = SettingsRepository.get(this)
+        mapStore = MapStore(this)
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         goForeground()
 
@@ -73,29 +82,43 @@ class OverlayService : LifecycleService() {
         )
         attach()
 
-        // Ausschalten beendet den Dienst.
+        // Ausschalten beendet den Dienst (außer während der Kalibrierung).
         lifecycleScope.launch {
-            repo.settings.map { it.enabled }.distinctUntilChanged().collect { enabled ->
-                if (!enabled) stopSelf()
-            }
+            combine(repo.settings.map { it.enabled }, repo.calibration.map { it != null }) { e, c -> e || c }
+                .distinctUntilChanged()
+                .collect { keep -> if (!keep) stopSelf() }
         }
         // Vorher/Nachher: Fenster nur ausblenden, Maske bleibt erhalten.
         lifecycleScope.launch {
             repo.bypass.collect { b -> view?.visibility = if (b) android.view.View.INVISIBLE else android.view.View.VISIBLE }
         }
-        // Maske bei jeder Parameter- oder Größenänderung einmal neu berechnen.
+        // Gespeicherte Karte laden, wenn sich die aktive Karte ändert.
+        val activeMap = repo.settings.map { it.activeMapId }.distinctUntilChanged().map { id ->
+            id?.let { withContext(Dispatchers.IO) { mapStore.load(it) } }
+        }
+        val source = combine(repo.settings, repo.calibration, activeMap) { s, cal, map ->
+            maskSource(s, cal, map)
+        }.distinctUntilChanged()
+        // Maske bei jeder Änderung von Quelle oder Größe einmal neu berechnen.
         lifecycleScope.launch {
-            combine(repo.settings.map { it.params }.distinctUntilChanged(), size.filterNotNull()) { p, s -> p to s }
-                .collectLatest { (params, s) ->
-                    val (w, h) = s
+            combine(source, size.filterNotNull()) { src, sz -> src to sz }
+                .collectLatest { (src, sz) ->
+                    val (w, h) = sz
                     val bmp = withContext(Dispatchers.Default) {
                         val t0 = System.nanoTime()
-                        val px = EdgeMaskRenderer.render(params, w, h)
-                        MaskBitmap.fromPremultiplied(px, w, h).also {
-                            Log.d(TAG, "Maske ${w}x$h in ${(System.nanoTime() - t0) / 1_000_000} ms")
+                        val px = when (src) {
+                            MaskSource.None -> null
+                            is MaskSource.Param -> EdgeMaskRenderer.render(src.params, w, h)
+                            is MaskSource.Map -> CorrectionMapRenderer.render(src.map, src.variant, src.strength, w, h)
+                        }
+                        px?.let {
+                            MaskBitmap.fromPremultiplied(it, w, h).also {
+                                Log.d(TAG, "Maske ($src) ${w}x$h in ${(System.nanoTime() - t0) / 1_000_000} ms")
+                            }
                         }
                     }
-                    view?.setBitmap(bmp) ?: bmp.recycle()
+                    val v = view
+                    if (v != null) v.setBitmap(bmp) else bmp?.recycle()
                 }
         }
     }
@@ -205,6 +228,32 @@ class OverlayService : LifecycleService() {
         ServiceCompat.startForeground(this, NOTIFICATION_ID, n, type)
     }
 
+    private sealed interface MaskSource {
+        data object None : MaskSource
+        data class Param(val params: EdgeParams) : MaskSource
+        data class Map(val map: CorrectionMap, val variant: Int, val strength: Float) : MaskSource {
+            override fun toString() = "Karte v$variant s$strength"
+        }
+    }
+
+    private fun maskSource(s: Settings, cal: CalibrationState?, active: CorrectionMap?): MaskSource {
+        if (cal != null) {
+            when (cal.overlay) {
+                CalibrationOverlay.OFF -> return MaskSource.None
+                CalibrationOverlay.PREVIEW -> cal.previewMap?.let {
+                    return MaskSource.Map(it, cal.previewVariant, cal.previewStrength)
+                }
+                CalibrationOverlay.ACTIVE -> Unit
+            }
+        }
+        if (!s.enabled) return MaskSource.None
+        return if (s.useMap && active != null) {
+            MaskSource.Map(active, s.mapVariant, s.mapStrength)
+        } else {
+            MaskSource.Param(s.params)
+        }
+    }
+
     companion object {
         private const val TAG = "EdgeFix"
         private const val CHANNEL = "overlay"
@@ -213,11 +262,12 @@ class OverlayService : LifecycleService() {
         private val _running = MutableStateFlow(false)
         val running: StateFlow<Boolean> = _running.asStateFlow()
 
-        /** Startet den Dienst, wenn Korrektur an und Berechtigung vorhanden ist. */
+        /** Startet den Dienst, wenn Korrektur an (oder Kalibrierung läuft) und Berechtigung vorhanden ist. */
         fun sync(context: Context) {
-            val s = SettingsRepository.get(context).settings.value
+            val repo = SettingsRepository.get(context)
+            val s = repo.settings.value
             val i = Intent(context, OverlayService::class.java)
-            if (s.enabled && OverlayPermission.granted(context)) {
+            if ((s.enabled || repo.calibration.value != null) && OverlayPermission.granted(context)) {
                 ContextCompat.startForegroundService(context, i)
             } else {
                 context.stopService(i)
