@@ -26,6 +26,16 @@ object Network {
         return null
     }
 
+    /** Alle IPv4-Adressen des Geräts im Heimnetz (WLAN zuerst). */
+    fun localIps(): List<String> =
+        runCatching { NetworkInterface.getNetworkInterfaces().toList() }.getOrDefault(emptyList())
+            .filter { runCatching { it.isUp && !it.isLoopback }.getOrDefault(false) }
+            .sortedBy { if (it.name.startsWith("wlan")) 0 else if (it.name.startsWith("eth")) 1 else 2 }
+            .flatMap { it.inetAddresses.toList() }
+            .filterIsInstance<Inet4Address>()
+            .filter { !it.isLoopbackAddress }
+            .mapNotNull { it.hostAddress }
+
     fun deviceName(context: Context): String =
         runCatching { Settings.Global.getString(context.contentResolver, "device_name") }.getOrNull()
             ?.takeIf { it.isNotBlank() }

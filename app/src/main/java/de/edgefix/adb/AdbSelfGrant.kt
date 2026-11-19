@@ -38,33 +38,47 @@ object AdbSelfGrant {
         val cmd = "appops set ${context.packageName} SYSTEM_ALERT_WINDOW allow"
         // Bis zu drei Versuche: Manche adbd-Versionen trennen nach der Bestätigung
         // und erwarten eine neue Verbindung (dann ist der Schlüssel bekannt).
+        // Fire OS 8 trennt Verbindungen über 127.0.0.1 sofort. Deshalb auch die
+        // eigene Netzwerkadresse des Geräts versuchen (wie bei einer Verbindung vom PC).
+        val hosts = (listOf("127.0.0.1") + de.edgefix.calib.Network.localIps()).distinct()
         var last: Exception? = null
-        for (attempt in 1..3) {
-            if (attempt > 1) logger("— neuer Versuch $attempt —")
-            try {
-                AdbClient("127.0.0.1", 5555, key, logger).use { c ->
-                    c.connect()
-                    val out = c.shell(cmd).trim()
-                    if (out.isNotEmpty()) {
-                        return@withContext Result.Failed("Befehl meldet: $out")
+        var anyReachable = false
+        var success = false
+        outer@ for (host in hosts) {
+            for (attempt in 1..2) {
+                logger("— $host, Versuch $attempt —")
+                try {
+                    AdbClient(host, 5555, key, logger).use { c ->
+                        c.connect()
+                        val out = c.shell(cmd).trim()
+                        if (out.isNotEmpty()) {
+                            return@withContext Result.Failed("Befehl meldet: $out")
+                        }
                     }
+                    success = true
+                    break@outer
+                } catch (e: ConnectException) {
+                    logger("$host:5555 nicht erreichbar")
+                    break // nächste Adresse
+                } catch (e: SocketTimeoutException) {
+                    anyReachable = true
+                    logger("Zeitüberschreitung bei $host")
+                    last = e
+                    break
+                } catch (e: Exception) {
+                    anyReachable = true
+                    Log.w(TAG, "ADB $host Versuch $attempt", e)
+                    logger("✗ ${e.message ?: e.javaClass.simpleName}")
+                    last = e
+                    delay(1500)
                 }
-                last = null
-                break
-            } catch (e: ConnectException) {
-                logger("Port 5555 nicht erreichbar: ${e.message}")
-                return@withContext Result.AdbOff
-            } catch (e: SocketTimeoutException) {
-                logger("Zeitüberschreitung")
-                return@withContext Result.NotAuthorized
-            } catch (e: Exception) {
-                Log.w(TAG, "ADB Versuch $attempt", e)
-                logger("✗ ${e.message ?: e.javaClass.simpleName}")
-                last = e
-                delay(1500)
             }
         }
-        if (last != null) return@withContext Result.Failed(last.message ?: last.javaClass.simpleName)
+        if (!success) {
+            if (!anyReachable) return@withContext Result.AdbOff
+            if (last is SocketTimeoutException) return@withContext Result.NotAuthorized
+            return@withContext Result.Failed(last?.message ?: last?.javaClass?.simpleName ?: "unbekannt")
+        }
         // Die Änderung kann einen Moment brauchen, bis canDrawOverlays sie meldet.
         repeat(10) {
             if (OverlayPermission.granted(context)) return@withContext Result.Success

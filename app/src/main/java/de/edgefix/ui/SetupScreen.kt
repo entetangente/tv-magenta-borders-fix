@@ -7,6 +7,9 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -150,7 +153,8 @@ private fun ColumnScope.PermissionStep(onNext: () -> Unit) {
         "Hierher zurück und „Jetzt einrichten“ wählen.",
         "„USB-Debugging zulassen?“: Haken bei „Immer zulassen“, dann OK.",
     )
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    // Während/nach einem Versuch Platz für die Meldungen schaffen: Anleitung kompakt.
+    if (adbLog.isEmpty()) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         steps.forEachIndexed { i, t ->
             Row {
                 Text("${i + 1}.", fontSize = 21.sp, color = Accent, modifier = Modifier.width(34.dp))
@@ -166,15 +170,24 @@ private fun ColumnScope.PermissionStep(onNext: () -> Unit) {
             color = if (adbOn) Accent else androidx.compose.ui.graphics.Color(0xFFF0B35A),
         )
         if (status != null) {
-            Text(status!!, fontSize = 22.sp, color = androidx.compose.ui.graphics.Color(0xFFF0B35A))
+            Text(status!!, fontSize = 21.sp, color = androidx.compose.ui.graphics.Color(0xFFF0B35A), maxLines = 2)
         }
         // Protokoll der Verbindung (letzte Schritte), für die Fehlersuche
-        for (line in adbLog.takeLast(5)) {
-            Text(line, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        if (adbLog.isNotEmpty()) {
+            Text(
+                adbLog.takeLast(3).joinToString("   ·   "),
+                fontSize = 15.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+            )
         }
     }
     Spacer(Modifier.weight(1f))
-    Row(horizontalArrangement = Arrangement.spacedBy(20.dp), modifier = Modifier.fillMaxWidth()) {
+    // Knöpfe dürfen nicht zusammengedrückt werden, auch wenn darüber viel Text steht.
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).defaultMinSize(minHeight = 64.dp),
+    ) {
         BigButton(
             if (busy) "Bitte warten …" else "Jetzt einrichten",
             modifier = Modifier.focusRequester(focus),
