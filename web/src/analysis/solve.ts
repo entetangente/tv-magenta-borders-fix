@@ -12,6 +12,10 @@ export interface SolveOptions {
   /** Maximale Änderung der Deckkraft zwischen Nachbarzellen. */
   maxStep: number;
   iterations: number;
+  /** Gewicht der Helligkeitsstufen: L^levelPower (höher = helle Szenen zählen mehr). */
+  levelPower: number;
+  /** Unterhalb dieser Graustufe greift die Überkorrektur-Sperre nicht. */
+  guardFrom: number;
 }
 
 /** Rec.-709-Gewichte für die Helligkeit Y. */
@@ -19,7 +23,7 @@ const YW = [0.2126, 0.7152, 0.0722];
 /** Gewicht des Helligkeitsfehlers relativ zum Farbfehler. */
 const LUMA_WEIGHT = 0.1;
 
-export const DEFAULT_SOLVE: SolveOptions = { beta: 0.75, lambda: 1, mu: 0.02, maxStep: 0.01, iterations: 500 };
+export const DEFAULT_SOLVE: SolveOptions = { beta: 0.75, lambda: 1, mu: 0.02, maxStep: 0.06, iterations: 500, levelPower: 2, guardFrom: 0.3 };
 
 /** Korrekturkarte: Deckkraft a und vormultiplizierte Farbe P = a·O je Zelle. */
 export interface CorrectionMap {
@@ -74,7 +78,7 @@ export function solveMap(model: PanelModel, opt: SolveOptions = DEFAULT_SOLVE): 
   const mP = new Float32Array(n * 3), vP = new Float32Array(n * 3);
   // Helle Stufen zählen deutlich mehr: Dort ist derselbe Farbstich viel
   // sichtbarer (ΔE wächst mit der Helligkeit).
-  const w = model.levels.map((L) => L * L);
+  const w = model.levels.map((L) => Math.pow(L, opt.levelPower));
   const wsum = w.reduce((s, v) => s + v, 0);
   const T = [0, 0, 0];
   const xs = [0, 0, 0], Pc = [0, 0, 0], dPc = [0, 0, 0], dLdP = [0, 0, 0];
@@ -150,10 +154,10 @@ export function solveMap(model: PanelModel, opt: SolveOptions = DEFAULT_SOLVE): 
   for (let i = 0; i < n; i++) for (let c = 0; c < 3; c++) O[i * 3 + c] = a[i] > 1e-6 ? Pv[i * 3 + c] / a[i] : 0.5;
 
   // Räumlich glätten, dann Maske anwenden (unbetroffen = exakt 0).
-  let aS = gaussBlur(a, gw, gh, 1.0);
+  let aS = gaussBlur(a, gw, gh, 0.7);
   const P = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) for (let c = 0; c < 3; c++) P[i * 3 + c] = a[i] * O[i * 3 + c];
-  const PS = gaussBlur(P, gw, gh, 1.0, 3);
+  const PS = gaussBlur(P, gw, gh, 0.7, 3);
   const Os = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) for (let c = 0; c < 3; c++) Os[i * 3 + c] = aS[i] > 1e-6 ? Math.min(1, PS[i * 3 + c] / aS[i]) : 0.5;
   for (let i = 0; i < n; i++) aS[i] = mask[i] * aS[i];
@@ -166,6 +170,8 @@ export function solveMap(model: PanelModel, opt: SolveOptions = DEFAULT_SOLVE): 
     for (let tries = 0; tries < 30; tries++) {
       let flipped = false;
       for (let l = 0; l < model.levels.length && !flipped; l++) {
+        // Sehr dunkle Stufen regelt der Schwarz-Schutz (λ), den der Nutzer wählt.
+        if (model.levels[l] < opt.guardFrom) continue;
         const g = model.g[l];
         const ref = model.ref[l];
         const before = chromaVector([g[i * 3] * ref[0], g[i * 3 + 1] * ref[1], g[i * 3 + 2] * ref[2]], ref);

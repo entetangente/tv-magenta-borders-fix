@@ -36,7 +36,7 @@ export interface PhotoResult {
  * Tastet den entzerrten Bildschirm auf einem GW×GH-Raster ab (k×k Punkte je
  * Zelle mit Abstand zum Zellrand) und nimmt den Median je Kanal.
  */
-export function sampleGrid(img: RGBAImage, det: Detection, gw = GW, gh = GH, k = 4, inset = 0.2): { cells: Float32Array; clipped: number } {
+export function sampleGrid(img: RGBAImage, det: Detection, gw = GW, gh = GH, k = 3, inset = 0.2): { cells: Float32Array; clipped: number } {
   const H = unitToQuad(det.corners);
   const cells = new Float32Array(gw * gh * 3);
   const tmp = new Float32Array(3);

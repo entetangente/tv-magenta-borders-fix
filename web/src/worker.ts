@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 import { analyzePhoto, ISSUE_TEXT } from './analysis/measure';
 import { buildModel, type Capture, type PanelModel } from './analysis/model';
-import { computeMaps } from './analysis/pipeline';
+import { computeMaps, VARIANTS } from './analysis/pipeline';
 import { refineModel } from './analysis/refine';
 import { encodeMaps } from './analysis/mapfile';
 import type { CorrectionMap } from './analysis/solve';
@@ -54,7 +54,7 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
       }
       case 'refine': {
         if (!model || maps.length === 0) throw new Error('Noch keine Karte berechnet');
-        const { model: m2, report } = refineModel(model, maps[req.variant], req.strength, refineCaptures);
+        const { model: m2, report } = refineModel(model, maps[req.variant], req.strength, refineCaptures, VARIANTS[req.variant]?.guardFrom ?? 0.4);
         refineCaptures.length = 0;
         let buf: ArrayBuffer | null = null;
         if (report.passed) {

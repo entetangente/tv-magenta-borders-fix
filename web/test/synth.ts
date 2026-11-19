@@ -21,6 +21,8 @@ export interface SynthOptions {
   bezel: number;
   /** dunkler Hinweis-Kasten in der Bildschirmmitte mitfotografiert */
   hintBox: boolean;
+  /** schmaler, kräftiger Rand wie beim echten Panel (ca. 1–1.5 % der Höhe) */
+  narrow: boolean;
   blur: number;
   seed: number;
 }
@@ -35,15 +37,22 @@ export const DEFAULT_CORNERS: Point[] = [
 export function defaults(o: Partial<SynthOptions> = {}): SynthOptions {
   return {
     w: 1600, h: 1200, corners: DEFAULT_CORNERS, level: 0.75, defect: 1, noise: 1.2,
-    exposure: 1.1, barrel: 0, blur: 0, seed: 1, wall: 0, bezel: 0.012, hintBox: false, ...o,
+    exposure: 1.1, barrel: 0, blur: 0, seed: 1, wall: 0, bezel: 0.012, hintBox: false, narrow: false, ...o,
   };
 }
 
 /** Panel-Fehler: Grün (und etwas Rot) fehlt zu den Rändern hin, Ecken stärker. */
-export function panelGain(u: number, v: number, defect: number): [number, number, number] {
+export function panelGain(u: number, v: number, defect: number, narrow = false): [number, number, number] {
   const ar = 16 / 9;
   const dl = u * ar, dr = (1 - u) * ar, dt = v, db = 1 - v;
   // linke Seite etwas stärker und breiter (ungleichmäßig, wie in echt)
+  if (narrow) {
+    // schmal und kräftig, unten in der Mitte etwas breiter
+    const wb = 0.008 + 0.012 * Math.exp(-(((u - 0.5) / 0.08) ** 2));
+    const en = Math.max(Math.exp(-dl / 0.006), Math.exp(-dr / 0.007), Math.exp(-dt / 0.008), Math.exp(-db / wb));
+    const kn = en * defect;
+    return [1 - 0.04 * kn, 1 - 0.3 * kn, 1 - 0.0 * kn];
+  }
   const e =
     Math.exp(-dl / 0.07) * 1.2 + Math.exp(-dr / 0.045) + Math.exp(-dt / 0.05) + Math.exp(-db / 0.04) * 0.8;
   const k = Math.min(1.6, e) * defect;
@@ -101,7 +110,7 @@ export function synthPhoto(opts: Partial<SynthOptions> = {}): RGBAImage {
       const i = (y * w + x) * 4;
       let rgb: number[];
       if (uv.x >= 0 && uv.x <= 1 && uv.y >= 0 && uv.y <= 1) {
-        const g = panelGain(uv.x, uv.y, o.defect);
+        const g = panelGain(uv.x, uv.y, o.defect, o.narrow);
         let a = 0;
         if (o.map) a = sampleMap(o.map, uv.x, uv.y, o.strength ?? 1, P);
         const vig = 1 - 0.18 * (((px - cx) ** 2 + (py - cy) ** 2) / (rn * rn));

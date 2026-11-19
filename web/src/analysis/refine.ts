@@ -41,6 +41,8 @@ export function refineModel(
   map: CorrectionMap,
   strength: number,
   captures: Capture[],
+  /** Überkorrektur nur ab dieser Graustufe werten (wie bei der gewählten Variante). */
+  guardFrom = 0.4,
 ): { model: PanelModel; report: RoundReport } {
   const { gw, gh, mask } = model;
   const n = gw * gh;
@@ -83,7 +85,7 @@ export function refineModel(
         afterMax = Math.max(afterMax, Dafter[i]);
         const vb = chromaVector(beforeRgb, ref);
         const va = chromaVector(measRgb, ref);
-        if (vb[0] * va[0] + vb[1] * va[1] < 0 && Math.hypot(va[0], va[1]) > model.t0) over++;
+        if (cap.level >= guardFrom && vb[0] * va[0] + vb[1] * va[1] < 0 && Math.hypot(va[0], va[1]) > model.t0) over++;
       }
     }
     const sb = gaussBlur(Dbefore, gw, gh, 1.5);

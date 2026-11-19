@@ -126,3 +126,26 @@ describe('Korrekturkarte', () => {
     }
   });
 });
+
+describe('Schmaler Rand (wie echtes Panel)', () => {
+  const corners = DEFAULT_CORNERS.map((c) => ({ x: c.x * 2, y: c.y * 2 }));
+  const captures = CAPTURE_LEVELS.map((level) => {
+    const r = analyzePhoto(synthPhoto({ level, narrow: true, w: 3200, h: 2400, corners, seed: Math.round(level * 100) }));
+    expect(r.issues).toEqual([]);
+    return { level, cells: r.cells! };
+  });
+  const model = buildModel(captures);
+  const set = computeMaps(model);
+
+  it('korrigiert direkt an der Kante kräftig', () => {
+    const strong = set.maps[0];
+    const top = strong.a[0 * GW + (GW >> 1)];
+    const center = strong.a[(GH >> 1) * GW + (GW >> 1)];
+    console.log('schmal: a oben', top.toFixed(3), 'vorher', set.before95.toFixed(2), 'nachher', set.after95.map((v) => v.toFixed(2)), 'Abdeckung', set.coverage.toFixed(3));
+    expect(center).toBe(0);
+    expect(top).toBeGreaterThan(0.06);
+    expect(set.after95[0]).toBeLessThan(set.before95 * 0.6);
+    // Nur ein schmaler Streifen wird verändert
+    expect(set.coverage).toBeLessThan(0.15);
+  });
+});

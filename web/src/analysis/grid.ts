@@ -1,6 +1,10 @@
 /** Gemeinsame Rasterkonstanten und Hilfsfunktionen für 160×90-Karten. */
-export const GW = 160;
-export const GH = 90;
+/**
+ * Rasterauflösung der Korrekturkarte. 384×216 ergibt bei 1080p etwa 5 Pixel je
+ * Zelle; lila Ränder sind oft nur 1–2 % der Bildhöhe breit.
+ */
+export const GW = 384;
+export const GH = 216;
 
 /** Zellen der unbetroffenen Bildmitte (Referenz). */
 export function isCenterCell(x: number, y: number, gw = GW, gh = GH): boolean {

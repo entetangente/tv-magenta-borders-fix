@@ -10,7 +10,7 @@ bei hellen Inhalten weniger auffällt. Die Bildmitte bleibt bitgenau unveränder
 - Ersteinrichtung mit Selbst-Freischaltung der Overlay-Berechtigung über ADB (kein PC nötig)
 - Autostart nach dem Einschalten und nach App-Updates
 - **Kalibrierung mit dem Handy:** QR-Code scannen, 5 Fotos, die Web-App berechnet eine
-  Korrekturkarte (160×90) und schickt sie an den Fernseher. Vorher/Nachher, Stärke,
+  Korrekturkarte (384×216) und schickt sie an den Fernseher. Vorher/Nachher, Stärke,
   Schutz für dunkle Szenen, optionales Nachmessen (geschlossener Regelkreis).
 
 Folgt: Profile SDR/HDR, Abgleich per Auge, Schnellumschaltung (Stufe 3).
@@ -30,7 +30,7 @@ Folgt: Profile SDR/HDR, Abgleich per Auge, Schnellumschaltung (Stufe 3).
 ### Auswertung (web/src/analysis)
 - `detect.ts`: Bildschirm finden (Otsu-Schwelle, größte helle Fläche, Kantenpunkte entlang
   der Normalen, RANSAC-Geraden, Durchbiegung als Weitwinkel-Test, Kantenbreite als Schärfetest)
-- `measure.ts`: Homografie, 160×90-Raster, Median je Zelle, Fotoprüfung
+- `measure.ts`: Homografie, 384×216-Raster, Median je Zelle, Fotoprüfung
 - `model.ts`: Panel-Modell g je Zelle und Stufe relativ zur Bildmitte desselben Fotos,
   Farbabstand D (ΔE2000, Helligkeit herausgerechnet), Rauschgrenze t0 aus der Bildmitte,
   Betroffenheitsmaske M = smoothstep(t0, 2·t0, D)

@@ -85,7 +85,7 @@ export function buildModel(captures: Capture[], gw = GW, gh = GH): PanelModel {
     }
   }
   for (let i = 0; i < Dsum.length; i++) Dsum[i] /= Math.max(1, Dn);
-  const D = gaussBlur(Dsum, gw, gh, 1.5);
+  const D = gaussBlur(Dsum, gw, gh, 1.0);
   const center: number[] = [];
   for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) if (isCenterCell(x, y, gw, gh)) center.push(D[y * gw + x]);
   // Schwelle aus der Messung: dreifache Streuung der Mitte, mindestens 0.6 ΔE.

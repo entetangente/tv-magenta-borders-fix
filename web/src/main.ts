@@ -72,7 +72,8 @@ function takePhoto(): Promise<File | null> {
 /** Foto laden und auf höchstens 2000 px Breite verkleinern. */
 async function loadImage(file: File): Promise<{ width: number; height: number; data: Uint8ClampedArray; thumb: string }> {
   const bmp = await createImageBitmap(file);
-  const scale = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+  // Volle Auflösung (bis 4000 px): schmale Ränder brauchen jedes Pixel.
+  const scale = Math.min(1, 4000 / Math.max(bmp.width, bmp.height));
   const w = Math.round(bmp.width * scale);
   const hgt = Math.round(bmp.height * scale);
   const canvas = h('canvas', { width: w, height: hgt });

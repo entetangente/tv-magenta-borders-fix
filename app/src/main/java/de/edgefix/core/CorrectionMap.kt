@@ -22,7 +22,7 @@ class CorrectionMap(
     }
 
     companion object {
-        const val MAX_BYTES = 4 * 1024 * 1024
+        const val MAX_BYTES = 8 * 1024 * 1024
 
         fun parse(bytes: ByteArray): CorrectionMap {
             require(bytes.size >= 12) { "Datei zu kurz" }
