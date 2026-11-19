@@ -72,10 +72,11 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
     implementation(libs.tv.material)
     implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.dadb)
     implementation(libs.nanohttpd)
     implementation(libs.nanohttpd.websocket)
     implementation(libs.zxing.core)
 
     testImplementation(libs.junit)
+    // nur zum Vergleich des Schlüsselformats in AdbKeysTest
+    testImplementation(libs.dadb)
 }

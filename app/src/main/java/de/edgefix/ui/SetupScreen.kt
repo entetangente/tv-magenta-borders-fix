@@ -107,6 +107,7 @@ private fun ColumnScope.PermissionStep(onNext: () -> Unit) {
     var granted by remember { mutableStateOf(OverlayPermission.granted(context)) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
+    val adbLog = remember { mutableStateListOf<String>() }
     val focus = remember { FocusRequester() }
 
     // Beim Zurückkehren aus den Fire-TV-Einstellungen neu prüfen.
@@ -167,6 +168,10 @@ private fun ColumnScope.PermissionStep(onNext: () -> Unit) {
         if (status != null) {
             Text(status!!, fontSize = 22.sp, color = androidx.compose.ui.graphics.Color(0xFFF0B35A))
         }
+        // Protokoll der Verbindung (letzte Schritte), für die Fehlersuche
+        for (line in adbLog.takeLast(5)) {
+            Text(line, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        }
     }
     Spacer(Modifier.weight(1f))
     Row(horizontalArrangement = Arrangement.spacedBy(20.dp), modifier = Modifier.fillMaxWidth()) {
@@ -178,15 +183,13 @@ private fun ColumnScope.PermissionStep(onNext: () -> Unit) {
                 busy = true
                 status = "Verbinde mit dem Fire TV …"
                 scope.launch {
-                    val r = AdbSelfGrant.run(
-                        context,
-                        onWaitingForConfirm = {
-                            status = "Verbunden. Falls „USB-Debugging zulassen?“ erscheint: „Immer zulassen“ ankreuzen und OK."
-                        },
-                        onRetry = { n ->
-                            status = "Verbindung wurde getrennt, neuer Versuch (${n + 1}) … Falls die Abfrage erscheint: „Immer zulassen“ und OK."
-                        },
-                    )
+                    adbLog.clear()
+                    val r = AdbSelfGrant.run(context) { line ->
+                        adbLog.add(line)
+                        if (line.startsWith("→ öffentlicher Schlüssel")) {
+                            status = "Jetzt sollte „USB-Debugging zulassen?“ erscheinen: „Immer zulassen“ ankreuzen und OK."
+                        }
+                    }
                     busy = false
                     status = when (r) {
                         AdbSelfGrant.Result.Success -> null

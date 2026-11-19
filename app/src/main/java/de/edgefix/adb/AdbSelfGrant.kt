@@ -2,7 +2,6 @@ package de.edgefix.adb
 
 import android.content.Context
 import android.util.Log
-import dadb.Dadb
 import de.edgefix.overlay.OverlayPermission
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -26,71 +25,46 @@ object AdbSelfGrant {
     }
 
     /**
-     * [onWaitingForConfirm] wird aufgerufen, sobald die Verbindung steht und der
-     * Fire TV ggf. „Debugging zulassen?“ anzeigt.
+     * [log] erhält jeden Protokollschritt als kurze Zeile (für die Anzeige am Fernseher).
      */
-    /** Fehler mit Ursache als kurze, lesbare Zeile. */
-    private fun describe(e: Throwable): String {
-        val parts = generateSequence(e) { it.cause }.take(3).map { t ->
-            t.javaClass.simpleName + (t.message?.let { ": $it" } ?: "")
-        }
-        return parts.joinToString(" ← ")
-    }
-
-    suspend fun run(
-        context: Context,
-        onWaitingForConfirm: () -> Unit = {},
-        onRetry: (attempt: Int) -> Unit = {},
-    ): Result = withContext(Dispatchers.IO) {
-        val keys = try {
+    suspend fun run(context: Context, log: (String) -> Unit = {}): Result = withContext(Dispatchers.IO) {
+        val key = try {
             AdbKeys.loadOrCreate(context.filesDir)
         } catch (e: Exception) {
             Log.e(TAG, "ADB-Schlüssel", e)
             return@withContext Result.Failed("Schlüssel konnte nicht erzeugt werden: ${e.message}")
         }
-        // Erst prüfen, ob überhaupt jemand auf Port 5555 lauscht.
-        try {
-            java.net.Socket().use { it.connect(java.net.InetSocketAddress("127.0.0.1", 5555), 2000) }
-        } catch (e: Exception) {
-            return@withContext Result.AdbOff
-        }
-        onWaitingForConfirm()
+        val logger: (String) -> Unit = { Log.i(TAG, "ADB: $it"); log(it) }
         val cmd = "appops set ${context.packageName} SYSTEM_ALERT_WINDOW allow"
-        // Manche adbd-Versionen trennen die Verbindung, während oder nachdem die
-        // Abfrage „USB-Debugging zulassen?“ bestätigt wird, und erwarten eine neue
-        // Verbindung. Deshalb bei Verbindungsabbruch mehrfach neu verbinden.
-        val deadline = System.currentTimeMillis() + 90_000
-        var attempt = 0
-        var lastError: Exception? = null
-        while (System.currentTimeMillis() < deadline) {
-            attempt++
+        // Bis zu drei Versuche: Manche adbd-Versionen trennen nach der Bestätigung
+        // und erwarten eine neue Verbindung (dann ist der Schlüssel bekannt).
+        var last: Exception? = null
+        for (attempt in 1..3) {
+            if (attempt > 1) logger("— neuer Versuch $attempt —")
             try {
-                // Großzügiger Socket-Timeout: Der Nutzer muss am Fernseher erst bestätigen.
-                Dadb.create("127.0.0.1", 5555, keys, 5_000, 60_000).use { dadb ->
-                    val r = dadb.shell(cmd)
-                    Log.i(TAG, "appops (Versuch $attempt): exit=${r.exitCode} out=${r.allOutput}")
-                    if (r.exitCode != 0) {
-                        return@withContext Result.Failed("Befehl fehlgeschlagen (${r.exitCode}): ${r.allOutput.trim()}")
+                AdbClient("127.0.0.1", 5555, key, logger).use { c ->
+                    c.connect()
+                    val out = c.shell(cmd).trim()
+                    if (out.isNotEmpty()) {
+                        return@withContext Result.Failed("Befehl meldet: $out")
                     }
                 }
-                lastError = null
+                last = null
                 break
             } catch (e: ConnectException) {
+                logger("Port 5555 nicht erreichbar: ${e.message}")
                 return@withContext Result.AdbOff
             } catch (e: SocketTimeoutException) {
+                logger("Zeitüberschreitung")
                 return@withContext Result.NotAuthorized
             } catch (e: Exception) {
                 Log.w(TAG, "ADB Versuch $attempt", e)
-                lastError = e
-                onRetry(attempt)
+                logger("✗ ${e.message ?: e.javaClass.simpleName}")
+                last = e
                 delay(1500)
             }
         }
-        lastError?.let { e ->
-            val msg = describe(e)
-            return@withContext if (msg.contains("auth", ignoreCase = true)) Result.NotAuthorized
-            else Result.Failed("$msg (nach $attempt Versuchen)")
-        }
+        if (last != null) return@withContext Result.Failed(last.message ?: last.javaClass.simpleName)
         // Die Änderung kann einen Moment brauchen, bis canDrawOverlays sie meldet.
         repeat(10) {
             if (OverlayPermission.granted(context)) return@withContext Result.Success
