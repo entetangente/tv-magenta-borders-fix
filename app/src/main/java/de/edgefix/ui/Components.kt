@@ -222,6 +222,8 @@ fun BigButton(
             text,
             fontSize = 24.sp,
             fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            softWrap = false,
             modifier = Modifier.padding(horizontal = 32.dp, vertical = 16.dp),
         )
     }

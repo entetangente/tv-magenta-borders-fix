@@ -173,8 +173,13 @@ private fun ColumnScope.PermissionStep(onNext: () -> Unit) {
                 }
             },
         )
+        OverlayPermission.systemDialogIntent(context)?.let { intent ->
+            BigButton("Systemdialog öffnen", primary = false, onClick = { context.tryStart(intent) })
+        }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(20.dp), modifier = Modifier.fillMaxWidth()) {
         BigButton(
-            "Fire-TV-Einstellungen öffnen",
+            "Fire-TV-Einstellungen",
             primary = false,
             onClick = {
                 context.tryStart(
@@ -184,10 +189,6 @@ private fun ColumnScope.PermissionStep(onNext: () -> Unit) {
                 )
             },
         )
-        OverlayPermission.systemDialogIntent(context)?.let { intent ->
-            BigButton("Systemdialog", primary = false, onClick = { context.tryStart(intent) })
-        }
-        Spacer(Modifier.weight(1f))
         BigButton("Überspringen", primary = false, onClick = onNext)
     }
 }

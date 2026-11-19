@@ -14,6 +14,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Surface
+import androidx.tv.material3.SurfaceDefaults
 import de.edgefix.overlay.OverlayService
 import de.edgefix.store.SettingsRepository
 
@@ -34,7 +36,15 @@ class MainActivity : ComponentActivity() {
                 BackHandler(enabled = screen == Screen.TUNING || screen == Screen.SETTINGS || screen == Screen.CALIBRATION) {
                     screen = Screen.HOME
                 }
-                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                // Surface setzt die Textfarbe für alles darin. Ohne sie zeichnet
+                // tv-material Text schwarz (auf dunklem Hintergrund unsichtbar).
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    colors = SurfaceDefaults.colors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                    ),
+                ) {
                     when (screen) {
                         Screen.SETUP -> SetupScreen(
                             repo = repo,
