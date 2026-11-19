@@ -77,7 +77,9 @@ export function analyzePhoto(img: RGBAImage): PhotoResult {
   const { width: w, height: h } = img;
   const margin = 0.01 * Math.max(w, h);
   const outside = det.corners.some((c) => c.x < margin || c.y < margin || c.x > w - margin || c.y > h - margin);
-  if (det.touchesBorder || outside) issues.push('cropped');
+  // Nur die gefundenen Ecken zählen. Eine helle Fläche am Fotorand (Wand,
+  // Spiegelung) ist kein Grund, das Foto abzulehnen.
+  if (outside) issues.push('cropped');
   else if (det.areaFraction < 0.15) issues.push('too_far');
 
   if (det.edges.some((e) => e.bow > 0.004)) issues.push('wide_angle');

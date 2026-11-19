@@ -70,7 +70,7 @@ function takePhoto(): Promise<File | null> {
 }
 
 /** Foto laden und auf höchstens 2000 px Breite verkleinern. */
-async function loadImage(file: File): Promise<{ width: number; height: number; data: Uint8ClampedArray }> {
+async function loadImage(file: File): Promise<{ width: number; height: number; data: Uint8ClampedArray; thumb: string }> {
   const bmp = await createImageBitmap(file);
   const scale = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
   const w = Math.round(bmp.width * scale);
@@ -81,7 +81,10 @@ async function loadImage(file: File): Promise<{ width: number; height: number; d
   ctx.drawImage(bmp, 0, 0, w, hgt);
   bmp.close?.();
   const id = ctx.getImageData(0, 0, w, hgt);
-  return { width: w, height: hgt, data: id.data };
+  // kleine Vorschau für Rückmeldungen bei abgelehnten Fotos
+  const t = h('canvas', { width: 480, height: Math.round((480 * hgt) / w) });
+  t.getContext('2d')!.drawImage(canvas, 0, 0, t.width, t.height);
+  return { width: w, height: hgt, data: id.data, thumb: t.toDataURL('image/jpeg', 0.7) };
 }
 
 // ---------- Ablauf ----------
@@ -150,7 +153,7 @@ function captureScreen(index: number, refine = false): void {
     btn.disabled = true;
     msg.replaceChildren('Prüfe Foto …');
     try {
-      const img = await loadImage(file);
+      const { thumb, ...img } = await loadImage(file);
       const r = await call({ cmd: 'analyze', level, img, refine }, [img.data.buffer]);
       if (r.ok) {
         if (index + 1 < n) captureScreen(index + 1, refine);
@@ -158,7 +161,11 @@ function captureScreen(index: number, refine = false): void {
         else computeScreen();
         return;
       }
-      msg.replaceChildren(h('span', { cls: 'err' }, r.issues?.[0] ?? r.error ?? 'Foto unbrauchbar.'));
+      msg.replaceChildren(
+        h('span', { cls: 'err' }, r.issues?.[0] ?? r.error ?? 'Foto unbrauchbar.'),
+        preview(thumb, img.width, img.height, r.corners),
+        h('small', {}, r.corners ? 'Grün: hier vermutet die App den Bildschirm.' : 'Die App hat keinen Bildschirm gefunden.'),
+      );
       btn.textContent = 'Nochmal versuchen';
     } catch (err) {
       msg.replaceChildren(h('span', { cls: 'err' }, `Foto konnte nicht gelesen werden: ${(err as Error).message}`));
@@ -173,6 +180,27 @@ function captureScreen(index: number, refine = false): void {
     h('div', { cls: 'spacer' }),
     btn,
   );
+}
+
+/** Foto mit eingezeichnetem, erkanntem Bildschirmumriss. */
+function preview(src: string, w: number, hgt: number, corners: { x: number; y: number }[] | null): HTMLElement {
+  const box = h('div', { cls: 'preview' });
+  box.style.position = 'relative';
+  box.append(h('img', { src, cls: 'thumb' }));
+  if (corners) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${w} ${hgt}`);
+    svg.setAttribute('style', 'position:absolute;inset:0;width:100%;height:100%');
+    const poly = document.createElementNS(ns, 'polygon');
+    poly.setAttribute('points', corners.map((c) => `${c.x},${c.y}`).join(' '));
+    poly.setAttribute('fill', 'none');
+    poly.setAttribute('stroke', '#8bd17c');
+    poly.setAttribute('stroke-width', String(Math.max(w, hgt) / 200));
+    svg.append(poly);
+    box.append(svg);
+  }
+  return box;
 }
 
 async function computeScreen(): Promise<void> {

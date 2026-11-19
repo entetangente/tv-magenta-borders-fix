@@ -27,74 +27,111 @@ export interface Detection {
   areaFraction: number;
 }
 
-function otsu(values: Float32Array): number {
-  const hist = new Float64Array(256);
-  for (const v of values) hist[Math.min(255, Math.max(0, Math.round(v)))]++;
-  const total = values.length;
-  let sum = 0;
-  for (let i = 0; i < 256; i++) sum += i * hist[i];
-  let sumB = 0;
-  let wB = 0;
-  let best = 0;
-  let thr = 128;
-  for (let t = 0; t < 256; t++) {
-    wB += hist[t];
-    if (wB === 0) continue;
-    const wF = total - wB;
-    if (wF === 0) break;
-    sumB += t * hist[t];
-    const mB = sumB / wB;
-    const mF = (sum - sumB) / wF;
-    const between = wB * wF * (mB - mF) * (mB - mF);
-    if (between > best) {
-      best = between;
-      thr = t;
+/**
+ * Fläche des Bildschirms: Ausgehend von der Bildmitte werden alle verbundenen
+ * Pixel gesammelt, deren Helligkeit zur Mitte passt (Testbild = gleichmäßiges
+ * Grau). Eine helle Wand hinter dem Fernseher ist durch den dunklen Rahmen
+ * getrennt und wird so nicht mitgenommen. Vorher wird die Maske „geöffnet“
+ * (erodiert), damit dünne Brücken über Spiegelungen oder einen hellen
+ * Rahmen die Fläche nicht mit der Wand verbinden.
+ */
+function screenRegion(Y: Float32Array, w: number, h: number): { pixels: Int32Array; touchesBorder: boolean } | null {
+  // Helligkeit des Bildschirms: Median eines kleinen Felds in der Bildmitte.
+  // Ist es dort dunkel (mitfotografierter Hinweistext), das mittlere Drittel.
+  const boxMedian = (fx: number, fy: number) => {
+    const vals: number[] = [];
+    for (let y = Math.floor(h * (0.5 - fy)); y < Math.ceil(h * (0.5 + fy)); y++) {
+      for (let x = Math.floor(w * (0.5 - fx)); x < Math.ceil(w * (0.5 + fx)); x++) vals.push(Y[y * w + x]);
+    }
+    return median(vals);
+  };
+  let c = boxMedian(0.03, 0.03);
+  if (!(c > 15)) c = boxMedian(1 / 6, 1 / 6);
+  if (!(c > 15)) return null;
+  // Erlaubter Bereich: Randabfall des Panels und Vignettierung der Kamera
+  const lo = c * 0.5;
+  // Nach oben eng: Die Mitte ist meist die hellste Stelle des Bildschirms,
+  // eine Wand gleicher Helligkeit soll nicht dazugehören.
+  const hi = Math.min(255.5, c * 1.12 + 6);
+  let mask: Uint8Array = new Uint8Array(w * h);
+  for (let i = 0; i < mask.length; i++) mask[i] = Y[i] >= lo && Y[i] <= hi ? 1 : 0;
+  const r = Math.max(1, Math.round(Math.min(w, h) / 250));
+  mask = erode(mask, w, h, r);
+  // Startpunkt: passender Pixel möglichst nah an der Bildmitte
+  let seed = -1;
+  let best = Infinity;
+  for (let y = Math.floor(h / 3); y < Math.ceil((2 * h) / 3); y++) {
+    for (let x = Math.floor(w / 3); x < Math.ceil((2 * w) / 3); x++) {
+      if (!mask[y * w + x]) continue;
+      const d = (x - w / 2) ** 2 + (y - h / 2) ** 2;
+      if (d < best) { best = d; seed = y * w + x; }
     }
   }
-  return thr + 0.5;
-}
-
-/** Größte zusammenhängende helle Fläche (4er-Nachbarschaft). */
-function largestComponent(mask: Uint8Array, w: number, h: number): { pixels: Int32Array; touchesBorder: boolean } {
-  const label = new Int32Array(w * h);
-  const stack = new Int32Array(w * h);
-  let bestCount = 0;
-  let bestLabel = 0;
-  let next = 1;
-  for (let start = 0; start < mask.length; start++) {
-    if (!mask[start] || label[start]) continue;
-    let sp = 0;
-    stack[sp++] = start;
-    label[start] = next;
-    let count = 0;
-    while (sp > 0) {
-      const p = stack[--sp];
-      count++;
-      const x = p % w;
-      const y = (p - x) / w;
-      if (x > 0 && mask[p - 1] && !label[p - 1]) { label[p - 1] = next; stack[sp++] = p - 1; }
-      if (x < w - 1 && mask[p + 1] && !label[p + 1]) { label[p + 1] = next; stack[sp++] = p + 1; }
-      if (y > 0 && mask[p - w] && !label[p - w]) { label[p - w] = next; stack[sp++] = p - w; }
-      if (y < h - 1 && mask[p + w] && !label[p + w]) { label[p + w] = next; stack[sp++] = p + w; }
-    }
-    if (count > bestCount) {
-      bestCount = count;
-      bestLabel = next;
-    }
-    next++;
-  }
-  const pixels = new Int32Array(bestCount);
-  let k = 0;
+  if (seed < 0) return null;
+  const comp = floodFill(mask, w, h, seed);
+  // wieder auf ursprüngliche Größe bringen
+  const grown = dilate(comp.mask, w, h, r);
+  const pixels: number[] = [];
   let touches = false;
-  for (let p = 0; p < label.length; p++) {
-    if (label[p] !== bestLabel || bestLabel === 0) continue;
-    pixels[k++] = p;
+  for (let p = 0; p < grown.length; p++) {
+    if (!grown[p]) continue;
+    pixels.push(p);
     const x = p % w;
     const y = (p - x) / w;
     if (x === 0 || y === 0 || x === w - 1 || y === h - 1) touches = true;
   }
-  return { pixels, touchesBorder: touches };
+  return { pixels: Int32Array.from(pixels), touchesBorder: touches };
 }
+
+function floodFill(mask: Uint8Array, w: number, h: number, seed: number): { mask: Uint8Array } {
+  const out = new Uint8Array(w * h);
+  const stack = new Int32Array(w * h);
+  let sp = 0;
+  stack[sp++] = seed;
+  out[seed] = 1;
+  while (sp > 0) {
+    const p = stack[--sp];
+    const x = p % w;
+    const y = (p - x) / w;
+    if (x > 0 && mask[p - 1] && !out[p - 1]) { out[p - 1] = 1; stack[sp++] = p - 1; }
+    if (x < w - 1 && mask[p + 1] && !out[p + 1]) { out[p + 1] = 1; stack[sp++] = p + 1; }
+    if (y > 0 && mask[p - w] && !out[p - w]) { out[p - w] = 1; stack[sp++] = p - w; }
+    if (y < h - 1 && mask[p + w] && !out[p + w]) { out[p + w] = 1; stack[sp++] = p + w; }
+  }
+  return { mask: out };
+}
+
+/** Binäre Erosion/Dilatation mit quadratischem Fenster (separierbar). */
+function morph(src: Uint8Array, w: number, h: number, r: number, erodeMode: boolean): Uint8Array {
+  const tmp = new Uint8Array(w * h);
+  const out = new Uint8Array(w * h);
+  const want = erodeMode ? 0 : 1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let v = erodeMode ? 1 : 0;
+      for (let k = -r; k <= r && v !== want; k++) {
+        const xx = x + k;
+        const s = xx < 0 || xx >= w ? 0 : src[y * w + xx];
+        if (s === want) v = want;
+      }
+      tmp[y * w + x] = v;
+    }
+  }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let v = erodeMode ? 1 : 0;
+      for (let k = -r; k <= r && v !== want; k++) {
+        const yy = y + k;
+        const s = yy < 0 || yy >= h ? 0 : tmp[yy * w + x];
+        if (s === want) v = want;
+      }
+      out[y * w + x] = v;
+    }
+  }
+  return out;
+}
+const erode = (m: Uint8Array, w: number, h: number, r: number) => morph(m, w, h, r, true);
+const dilate = (m: Uint8Array, w: number, h: number, r: number) => morph(m, w, h, r, false);
 
 function fitLineTLS(pts: Point[]): Line {
   let mx = 0;
@@ -166,7 +203,10 @@ function findEdgePoints(Y: Float32Array, w: number, h: number, p: Point, q: Poin
     const pos = (bi - n + Math.max(-0.5, Math.min(0.5, off))) * step;
     // Kantenbreite 10–90 %
     const inner = median(prof.slice(0, Math.max(3, bi - Math.ceil(6 / step))));
-    const outer = median(prof.slice(Math.min(prof.length - 3, bi + Math.ceil(6 / step))));
+    // Außen: dunkelster Wert hinter der Kante (Rahmen). Ein Median weiter außen
+    // würde eine helle Wand mitzählen.
+    let outer = Infinity;
+    for (let k = bi; k < prof.length; k++) outer = Math.min(outer, prof[k]);
     if (!(inner - outer > 8)) continue;
     const hi = outer + 0.9 * (inner - outer);
     const lo = outer + 0.1 * (inner - outer);
@@ -254,13 +294,10 @@ export function detectScreen(img: RGBAImage): { detection: Detection | null; tou
 function detect(img: RGBAImage, reportBorder: (t: boolean) => void): Detection | null {
   const { width: w, height: h } = img;
   const Y = luma(img);
-  const f = Math.max(1, Math.floor(Math.max(w, h) / 500));
+  const f = Math.max(1, Math.floor(Math.max(w, h) / 700));
   const small = downscale(Y, w, h, f);
-  const thr = otsu(small.data);
-  const mask = new Uint8Array(small.data.length);
-  for (let i = 0; i < mask.length; i++) mask[i] = small.data[i] > thr ? 1 : 0;
-  const comp = largestComponent(mask, small.w, small.h);
-  if (comp.pixels.length < 0.02 * mask.length) return null;
+  const comp = screenRegion(small.data, small.w, small.h);
+  if (!comp || comp.pixels.length < 0.02 * small.data.length) return null;
   reportBorder(comp.touchesBorder);
 
   // Grobe Ecken aus den Extrempunkten

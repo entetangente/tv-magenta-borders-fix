@@ -43,6 +43,28 @@ describe('Fotoprüfung', () => {
     expect(r.issues).toContain('blurry');
   });
 
+  for (const [name, level, wall] of [
+    ['helle Wand, helles Testbild', 0.75, 0.6],
+    ['helle Wand, dunkles Testbild', 0.15, 0.25],
+    ['Wand heller als der Bildschirm', 0.25, 0.5],
+  ] as const) {
+    it(`findet den Bildschirm vor heller Wand (${name})`, () => {
+      const r = analyzePhoto(synthPhoto({ level, wall, seed: 3 }));
+      expect(r.issues).toEqual([]);
+      r.detection!.corners.forEach((c, i) => {
+        expect(Math.hypot(c.x - DEFAULT_CORNERS[i].x, c.y - DEFAULT_CORNERS[i].y)).toBeLessThan(2);
+      });
+    });
+  }
+
+  it('lässt sich von einem mitfotografierten Hinweis in der Mitte nicht stören', () => {
+    const r = analyzePhoto(synthPhoto({ hintBox: true, wall: 0.4 }));
+    expect(r.detection).not.toBeNull();
+    r.detection!.corners.forEach((c, i) => {
+      expect(Math.hypot(c.x - DEFAULT_CORNERS[i].x, c.y - DEFAULT_CORNERS[i].y)).toBeLessThan(2);
+    });
+  });
+
   it('erkennt Überbelichtung', () => {
     const r = analyzePhoto(synthPhoto({ exposure: 3 }));
     expect(r.issues).toContain('overexposed');

@@ -143,12 +143,12 @@ private fun Step(n: Int, text: String) {
     }
 }
 
-/** Vollflächiges Messbild. Der Hinweis verschwindet nach 3 s, damit er nicht mitgemessen wird. */
+/** Vollflächiges Messbild. Der Hinweis verschwindet nach 2 s, damit er nicht mitgemessen wird. */
 @Composable
 private fun PatternView(level: Float, hint: String?) {
     var showHint by remember(level, hint) { mutableStateOf(hint != null) }
     LaunchedEffect(level, hint) {
-        delay(3000)
+        delay(2000)
         showHint = false
     }
     Box(Modifier.fillMaxSize().background(Color(level, level, level))) {

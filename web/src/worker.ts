@@ -41,7 +41,7 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
           if (idx >= 0) list.splice(idx, 1);
           list.push({ level: req.level, cells: r.cells });
         }
-        reply({ ok: r.ok, issues: r.issues.map((c) => ISSUE_TEXT[c]) });
+        reply({ ok: r.ok, issues: r.issues.map((c) => ISSUE_TEXT[c]), corners: r.detection?.corners ?? null });
         break;
       }
       case 'build': {

@@ -15,6 +15,12 @@ export interface SynthOptions {
   noise: number;
   exposure: number;
   barrel: number;
+  /** Helligkeit der Wand hinter dem Fernseher (linear, 0 = dunkler Raum) */
+  wall: number;
+  /** Breite des dunklen Rahmens um das Bild, Anteil der Bildschirmbreite */
+  bezel: number;
+  /** dunkler Hinweis-Kasten in der Bildschirmmitte mitfotografiert */
+  hintBox: boolean;
   blur: number;
   seed: number;
 }
@@ -29,7 +35,7 @@ export const DEFAULT_CORNERS: Point[] = [
 export function defaults(o: Partial<SynthOptions> = {}): SynthOptions {
   return {
     w: 1600, h: 1200, corners: DEFAULT_CORNERS, level: 0.75, defect: 1, noise: 1.2,
-    exposure: 1.1, barrel: 0, blur: 0, seed: 1, ...o,
+    exposure: 1.1, barrel: 0, blur: 0, seed: 1, wall: 0, bezel: 0.012, hintBox: false, ...o,
   };
 }
 
@@ -99,12 +105,17 @@ export function synthPhoto(opts: Partial<SynthOptions> = {}): RGBAImage {
         let a = 0;
         if (o.map) a = sampleMap(o.map, uv.x, uv.y, o.strength ?? 1, P);
         const vig = 1 - 0.18 * (((px - cx) ** 2 + (py - cy) ** 2) / (rn * rn));
-        rgb = [0, 1, 2].map((c) => {
+        const inHint = o.hintBox && Math.abs(uv.x - 0.5) < 0.09 && Math.abs(uv.y - 0.5) < 0.04;
+        rgb = inHint ? [0.01, 0.01, 0.01] : [0, 1, 2].map((c) => {
           const xin = (1 - a) * o.level + P[c]; // P = a·O vormultipliziert
           return g[c] * lin(xin) * o.exposure * vig;
         });
       } else {
-        rgb = [0.003, 0.003, 0.003];
+        const b = o.bezel;
+        const inFrame = uv.x > -b && uv.x < 1 + b && uv.y > -b * 16 / 9 && uv.y < 1 + b * 16 / 9;
+        // Wand: von oben nach unten etwas heller, leicht wärmer
+        const wl = o.wall * (0.85 + 0.3 * (py / h));
+        rgb = inFrame || o.wall === 0 ? [0.003, 0.003, 0.003] : [wl * 1.02, wl, wl * 0.93];
       }
       for (let c = 0; c < 3; c++) data[i + c] = linearToSrgb(rgb[c]) * 255 + gauss() * o.noise;
       data[i + 3] = 255;

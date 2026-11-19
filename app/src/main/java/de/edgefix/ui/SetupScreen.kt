@@ -173,9 +173,8 @@ private fun ColumnScope.PermissionStep(onNext: () -> Unit) {
                 }
             },
         )
-        OverlayPermission.systemDialogIntent(context)?.let { intent ->
-            BigButton("Systemdialog öffnen", primary = false, onClick = { context.tryStart(intent) })
-        }
+        // Kein Knopf für den Systemdialog „Über anderen Apps anzeigen“: Fire OS
+        // meldet ihn zwar als vorhanden, er tut dort aber nichts.
     }
     Row(horizontalArrangement = Arrangement.spacedBy(20.dp), modifier = Modifier.fillMaxWidth()) {
         BigButton(
