@@ -26,7 +26,7 @@ import de.edgefix.store.MapStore
 import de.edgefix.store.SettingsRepository
 
 @Composable
-fun SettingsScreen(repo: SettingsRepository, onPermission: () -> Unit, onRestartSetup: () -> Unit) {
+fun SettingsScreen(repo: SettingsRepository, onPermission: () -> Unit, onRestartSetup: () -> Unit, onDiagnostics: () -> Unit) {
     val context = LocalContext.current
     val settings by repo.settings.collectAsStateWithLifecycle()
     val granted = remember { OverlayPermission.granted(context) }
@@ -91,6 +91,7 @@ fun SettingsScreen(repo: SettingsRepository, onPermission: () -> Unit, onRestart
                     description = "Alle Werte der Feinabstimmung auf Startwerte",
                 )
             }
+            item { ActionRow("Diagnose", onDiagnostics, description = "Prüfen, ob das Overlay angezeigt wird") }
             item { ActionRow("Ersteinrichtung erneut starten", onRestartSetup) }
             item {
                 ActionRow("Version ${BuildConfig.VERSION_NAME}", {}, description = "Profile (SDR/HDR) folgen in Stufe 3")

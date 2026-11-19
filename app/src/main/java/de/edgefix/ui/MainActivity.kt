@@ -19,7 +19,7 @@ import androidx.tv.material3.SurfaceDefaults
 import de.edgefix.overlay.OverlayService
 import de.edgefix.store.SettingsRepository
 
-enum class Screen { SETUP, HOME, TUNING, SETTINGS, CALIBRATION }
+enum class Screen { SETUP, HOME, TUNING, SETTINGS, CALIBRATION, DIAGNOSTICS }
 
 class MainActivity : ComponentActivity() {
 
@@ -33,8 +33,8 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf(if (settings.setupDone) Screen.HOME else Screen.SETUP)
                 }
                 var setupStartStep by rememberSaveable { mutableStateOf(0) }
-                BackHandler(enabled = screen == Screen.TUNING || screen == Screen.SETTINGS || screen == Screen.CALIBRATION) {
-                    screen = Screen.HOME
+                BackHandler(enabled = screen != Screen.SETUP && screen != Screen.HOME) {
+                    screen = if (screen == Screen.DIAGNOSTICS) Screen.SETTINGS else Screen.HOME
                 }
                 // Surface setzt die Textfarbe für alles darin. Ohne sie zeichnet
                 // tv-material Text schwarz (auf dunklem Hintergrund unsichtbar).
@@ -64,10 +64,12 @@ class MainActivity : ComponentActivity() {
                         )
                         Screen.TUNING -> TuningScreen(repo = repo)
                         Screen.CALIBRATION -> CalibrationScreen(repo = repo)
+                        Screen.DIAGNOSTICS -> DiagnosticsScreen(repo = repo)
                         Screen.SETTINGS -> SettingsScreen(
                             repo = repo,
                             onPermission = { setupStartStep = 1; screen = Screen.SETUP },
                             onRestartSetup = { setupStartStep = 0; screen = Screen.SETUP },
+                            onDiagnostics = { screen = Screen.DIAGNOSTICS },
                         )
                     }
                 }

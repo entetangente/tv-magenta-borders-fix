@@ -32,6 +32,14 @@ class SettingsRepository private constructor(context: Context) {
         prefs.edit().putString(KEY, SettingsJson.encode(_settings.value)).apply()
     }
 
+    /** Diagnose: knallroten Testrahmen statt der Maske zeigen. Wird nicht gespeichert. */
+    private val _testFrame = MutableStateFlow(false)
+    val testFrame: StateFlow<Boolean> = _testFrame.asStateFlow()
+
+    fun setTestFrame(on: Boolean) {
+        _testFrame.value = on
+    }
+
     fun setBypass(on: Boolean) {
         _bypass.value = on
     }

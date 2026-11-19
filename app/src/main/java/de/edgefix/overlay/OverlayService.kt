@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -69,8 +70,10 @@ class OverlayService : LifecycleService() {
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         goForeground()
 
+        diag("Dienst gestartet") { it.copy(serviceStarted = it.serviceStarted + 1) }
         if (!OverlayPermission.granted(this)) {
             Log.w(TAG, "Keine Overlay-Berechtigung, Dienst wird beendet")
+            diag("Keine Overlay-Berechtigung, Dienst beendet") { it }
             _running.value = false
             stopSelf()
             return
@@ -84,7 +87,7 @@ class OverlayService : LifecycleService() {
 
         // Ausschalten beendet den Dienst (außer während der Kalibrierung).
         lifecycleScope.launch {
-            combine(repo.settings.map { it.enabled }, repo.calibration.map { it != null }) { e, c -> e || c }
+            combine(repo.settings.map { it.enabled }, repo.calibration.map { it != null }, repo.testFrame) { e, c, t -> e || c || t }
                 .distinctUntilChanged()
                 .collect { keep -> if (!keep) stopSelf() }
         }
@@ -96,29 +99,46 @@ class OverlayService : LifecycleService() {
         val activeMap = repo.settings.map { it.activeMapId }.distinctUntilChanged().map { id ->
             id?.let { withContext(Dispatchers.IO) { mapStore.load(it) } }
         }
-        val source = combine(repo.settings, repo.calibration, activeMap) { s, cal, map ->
-            maskSource(s, cal, map)
+        val source = combine(repo.settings, repo.calibration, activeMap, repo.testFrame) { s, cal, map, test ->
+            if (test) MaskSource.TestFrame else maskSource(s, cal, map)
         }.distinctUntilChanged()
         // Maske bei jeder Änderung von Quelle oder Größe einmal neu berechnen.
         lifecycleScope.launch {
             combine(source, size.filterNotNull()) { src, sz -> src to sz }
                 .collectLatest { (src, sz) ->
                     val (w, h) = sz
-                    val bmp = withContext(Dispatchers.Default) {
-                        val t0 = System.nanoTime()
-                        val px = when (src) {
-                            MaskSource.None -> null
-                            is MaskSource.Param -> EdgeMaskRenderer.render(src.params, w, h)
-                            is MaskSource.Map -> CorrectionMapRenderer.render(src.map, src.variant, src.strength, w, h)
-                        }
-                        px?.let {
-                            MaskBitmap.fromPremultiplied(it, w, h).also {
-                                Log.d(TAG, "Maske ($src) ${w}x$h in ${(System.nanoTime() - t0) / 1_000_000} ms")
+                    val bmp = try {
+                        withContext(Dispatchers.Default) {
+                            val t0 = System.nanoTime()
+                            val px = when (src) {
+                                MaskSource.None -> null
+                                MaskSource.TestFrame -> testFrame(w, h)
+                                is MaskSource.Param -> EdgeMaskRenderer.render(src.params, w, h)
+                                is MaskSource.Map -> CorrectionMapRenderer.render(src.map, src.variant, src.strength, w, h)
                             }
+                            var nonZero = 0
+                            var maxA = 0
+                            px?.forEach { v -> if (v != 0) { nonZero++; maxA = maxOf(maxA, v ushr 24) } }
+                            val ms = (System.nanoTime() - t0) / 1_000_000
+                            diag("Maske berechnet: $src") {
+                                it.copy(size = "${w}×$h", source = src.toString(), nonZeroPixels = nonZero, maxAlpha = maxA, renderMs = ms)
+                            }
+                            px?.let { MaskBitmap.fromPremultiplied(it, w, h) }
                         }
+                    } catch (e: Throwable) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        Log.e(TAG, "Maske", e)
+                        diag("Fehler beim Berechnen: ${e.javaClass.simpleName}: ${e.message}") { it }
+                        null
                     }
                     val v = view
-                    if (v != null) v.setBitmap(bmp) else bmp?.recycle()
+                    if (v != null) {
+                        v.setBitmap(bmp)
+                        diag("Bitmap gesetzt (${if (bmp == null) "leer" else "${bmp.width}×${bmp.height}"}), sichtbar=${v.visibility == android.view.View.VISIBLE}, angehängt=${v.isAttachedToWindow}") { it }
+                    } else {
+                        bmp?.recycle()
+                        diag("Kein Overlay-Fenster vorhanden, Maske verworfen") { it }
+                    }
                 }
         }
     }
@@ -141,6 +161,7 @@ class OverlayService : LifecycleService() {
 
     override fun onDestroy() {
         _running.value = false
+        diag("Dienst beendet") { it.copy(windowAdded = false) }
         runCatching { unregisterReceiver(screenOnReceiver) }
         detach()
         super.onDestroy()
@@ -173,13 +194,20 @@ class OverlayService : LifecycleService() {
 
     private fun attach() {
         if (view != null) return
-        val v = OverlayView(this) { w, h -> size.value = w to h }
+        val v = OverlayView(this) { w, h ->
+            diag("Fenstergröße gemeldet: ${w}×$h") { it }
+            size.value = w to h
+        }
         v.visibility = if (repo.bypass.value) android.view.View.INVISIBLE else android.view.View.VISIBLE
         try {
             wm.addView(v, layoutParams())
             view = v
+            diag("Overlay-Fenster angelegt") { it.copy(windowAdded = true, windowError = null) }
         } catch (e: Exception) {
             Log.e(TAG, "Overlay-Fenster konnte nicht angelegt werden", e)
+            diag("Overlay-Fenster FEHLER: ${e.javaClass.simpleName}: ${e.message}") {
+                it.copy(windowAdded = false, windowError = "${e.javaClass.simpleName}: ${e.message}")
+            }
             stopSelf()
         }
     }
@@ -230,6 +258,7 @@ class OverlayService : LifecycleService() {
 
     private sealed interface MaskSource {
         data object None : MaskSource
+        data object TestFrame : MaskSource
         data class Param(val params: EdgeParams) : MaskSource
         data class Map(val map: CorrectionMap, val variant: Int, val strength: Float) : MaskSource {
             override fun toString() = "Karte v$variant s$strength"
@@ -259,6 +288,37 @@ class OverlayService : LifecycleService() {
         private const val CHANNEL = "overlay"
         private const val NOTIFICATION_ID = 1
 
+        /** Knallroter, deckender Rahmen (24 px) zur Prüfung, ob das Overlay überhaupt erscheint. */
+        fun testFrame(w: Int, h: Int, t: Int = 24): IntArray {
+            val px = IntArray(w * h)
+            val red = 0xFFFF0000.toInt()
+            for (y in 0 until h) for (x in 0 until w) {
+                if (x < t || y < t || x >= w - t || y >= h - t) px[y * w + x] = red
+            }
+            return px
+        }
+
+        data class Diag(
+            val serviceStarted: Int = 0,
+            val windowAdded: Boolean = false,
+            val windowError: String? = null,
+            val size: String? = null,
+            val source: String? = null,
+            val nonZeroPixels: Int = 0,
+            val maxAlpha: Int = 0,
+            val renderMs: Long = 0,
+            val log: List<String> = emptyList(),
+        )
+
+        private val _diag = MutableStateFlow(Diag())
+        val diagnostics: StateFlow<Diag> = _diag.asStateFlow()
+
+        private fun diag(event: String, transform: (Diag) -> Diag) {
+            Log.i(TAG, event)
+            val t = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.GERMANY).format(java.util.Date())
+            _diag.update { transform(it).copy(log = (listOf("$t  $event") + it.log).take(12)) }
+        }
+
         private val _running = MutableStateFlow(false)
         val running: StateFlow<Boolean> = _running.asStateFlow()
 
@@ -267,7 +327,7 @@ class OverlayService : LifecycleService() {
             val repo = SettingsRepository.get(context)
             val s = repo.settings.value
             val i = Intent(context, OverlayService::class.java)
-            if ((s.enabled || repo.calibration.value != null) && OverlayPermission.granted(context)) {
+            if ((s.enabled || repo.calibration.value != null || repo.testFrame.value) && OverlayPermission.granted(context)) {
                 ContextCompat.startForegroundService(context, i)
             } else {
                 context.stopService(i)
