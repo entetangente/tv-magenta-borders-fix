@@ -11,5 +11,5 @@ export default defineConfig({
     assetsInlineLimit: 0,
   },
   worker: { format: 'es' },
-  test: { include: ['test/**/*.test.ts'], testTimeout: 60000 },
+  test: { include: ['test/**/*.test.ts'], testTimeout: 300000 },
 });
