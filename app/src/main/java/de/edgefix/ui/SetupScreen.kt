@@ -172,8 +172,11 @@ private fun ColumnScope.PermissionStep(onNext: () -> Unit) {
         if (status != null) {
             Text(status!!, fontSize = 21.sp, color = androidx.compose.ui.graphics.Color(0xFFF0B35A), maxLines = 2)
         }
-        // Protokoll der Verbindung (letzte Schritte), für die Fehlersuche
-        if (adbLog.isNotEmpty()) {
+        // Nach einem Fehlschlag: Weg über den PC anzeigen. Fire OS 8 (z. B. Fire TV
+        // Stick 4K Max) lässt die Selbst-Freischaltung nicht zu.
+        if (!busy && status != null) {
+            PcCommands("appops set ${context.packageName} SYSTEM_ALERT_WINDOW allow")
+        } else if (adbLog.isNotEmpty()) {
             Text(
                 adbLog.takeLast(3).joinToString("   ·   "),
                 fontSize = 15.sp,

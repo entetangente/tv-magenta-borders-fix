@@ -43,16 +43,17 @@ private const val THREE_MONTHS_MS = 90L * 24 * 60 * 60 * 1000
 fun HomeScreen(repo: SettingsRepository, onTuning: () -> Unit, onCalibrate: () -> Unit, onSettings: () -> Unit) {
     val context = LocalContext.current
     val settings by repo.settings.collectAsStateWithLifecycle()
+    val prof = settings.current
     val running by OverlayService.running.collectAsStateWithLifecycle()
     val hasPermission = remember(settings) { OverlayPermission.granted(context) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 64.dp, vertical = 40.dp),
-        verticalArrangement = Arrangement.spacedBy(28.dp),
+        Modifier.fillMaxSize().padding(horizontal = 64.dp, vertical = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        ScreenTitle("EdgeFix", "Gleicht lila Bildränder aus")
+        ScreenTitle("EdgeFix")
 
         // Statuskarte
         val shape = RoundedCornerShape(18.dp)
@@ -72,7 +73,7 @@ fun HomeScreen(repo: SettingsRepository, onTuning: () -> Unit, onCalibrate: () -
             border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Accent), shape = shape)),
             scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
         ) {
-            Row(Modifier.padding(28.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(horizontal = 28.dp, vertical = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     val active = settings.enabled && running
                     Text(
@@ -88,17 +89,17 @@ fun HomeScreen(repo: SettingsRepository, onTuning: () -> Unit, onCalibrate: () -
                     Text(
                         when {
                             !hasPermission -> "Unter Einstellungen → Berechtigung einrichten"
-                            settings.useMap && settings.lastCalibrated != 0L -> "Gemessene Korrektur vom " +
-                                DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(settings.lastCalibrated))
-                            settings.lastTuned == 0L -> "Noch nicht abgestimmt. Starte mit der Kalibrierung."
-                            else -> "Einfache Randmaske, zuletzt abgestimmt: " +
-                                DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(settings.lastTuned))
+                            prof.mapActive && prof.lastCalibrated != 0L -> "Profil ${settings.profile.label} · gemessene Korrektur vom " +
+                                DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(prof.lastCalibrated))
+                            prof.lastTuned == 0L -> "Profil ${settings.profile.label} · noch nicht abgestimmt"
+                            else -> "Profil ${settings.profile.label} · Randmaske, abgestimmt am " +
+                                DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(prof.lastTuned))
                         },
                         fontSize = 22.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    if (settings.useMap && settings.lastCalibrated != 0L &&
-                        System.currentTimeMillis() - settings.lastCalibrated > THREE_MONTHS_MS
+                    if (prof.mapActive && prof.lastCalibrated != 0L &&
+                        System.currentTimeMillis() - prof.lastCalibrated > THREE_MONTHS_MS
                     ) {
                         Text("Neu messen empfohlen", fontSize = 22.sp, color = Accent)
                     }
@@ -108,14 +109,16 @@ fun HomeScreen(repo: SettingsRepository, onTuning: () -> Unit, onCalibrate: () -
             }
         }
 
+        ProfileRow(repo)
+
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.fillMaxWidth()) {
-            Tile("Mit Handy kalibrieren", "Rand messen und genau ausgleichen", Modifier.weight(1f), onClick = onCalibrate)
-            Tile("Feinabstimmung", "Stärke und Farbe am Fernseher einstellen", Modifier.weight(1f), onClick = onTuning)
-            Tile("Einstellungen", "Autostart, Berechtigung, Zurücksetzen", Modifier.weight(1f), onClick = onSettings)
+            Tile("Kalibrieren", "Rand mit dem Handy vermessen", Modifier.weight(1f), onClick = onCalibrate)
+            Tile("Feinabstimmung", "Stärke, Farbe, Abgleich per Auge", Modifier.weight(1f), onClick = onTuning)
+            Tile("Einstellungen", "Autostart, Kalibrierungen, Hilfe", Modifier.weight(1f), onClick = onSettings)
         }
 
         Spacer(Modifier.weight(1f))
-        KeyHints("OK auf der Statuskarte: Korrektur ein/aus · ◀ ▶ ▲ ▼ wählen")
+        KeyHints("OK auf der Statuskarte: Korrektur ein/aus · Profil mit ◀ ▶ wechseln")
     }
 }
 
@@ -131,7 +134,7 @@ private fun Tile(
     Surface(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.height(170.dp),
+        modifier = modifier.height(130.dp),
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surface,
@@ -144,9 +147,9 @@ private fun Tile(
         border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(3.dp, Accent), shape = shape)),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
     ) {
-        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(title, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
-            Text(sub, fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(Modifier.padding(horizontal = 22.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(title, fontSize = 25.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(sub, fontSize = 19.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
         }
     }
 }

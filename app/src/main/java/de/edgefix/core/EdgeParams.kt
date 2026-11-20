@@ -57,10 +57,12 @@ data class EdgeParams(
     /** Farbton der Gegenfarbe in Grad (75° = Gelbgrün). */
     val hueDeg: Float = 75f,
     /** Breite des Verlaufs je Kante als Anteil der Bildhöhe, 0–0.20. */
-    val width: Edges = Edges.all(0.06f),
+    val width: Edges = Edges.all(0.02f),
     /** Stärke je Kante, 0–1.5. */
     val strength: Edges = Edges.all(1.0f),
     val curve: Curve = Curve.SMOOTHSTEP,
+    /** Detailform aus dem Abgleich per Auge; ersetzt Breite und Stärke je Kante. */
+    val shape: EdgeShape? = null,
 ) {
     fun clamped(): EdgeParams = copy(
         aMax = aMax.coerceIn(0f, MAX_A),
@@ -68,6 +70,7 @@ data class EdgeParams(
         hueDeg = ((hueDeg % 360f) + 360f) % 360f,
         width = width.map { it.coerceIn(0f, MAX_WIDTH) },
         strength = strength.map { it.coerceIn(0f, MAX_STRENGTH) },
+        shape = shape?.clamped(),
     )
 
     companion object {

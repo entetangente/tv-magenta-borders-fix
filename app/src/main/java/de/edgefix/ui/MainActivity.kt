@@ -19,7 +19,10 @@ import androidx.tv.material3.SurfaceDefaults
 import de.edgefix.overlay.OverlayService
 import de.edgefix.store.SettingsRepository
 
-enum class Screen { SETUP, HOME, TUNING, SETTINGS, CALIBRATION, DIAGNOSTICS }
+enum class Screen(val parent: Screen?) {
+    SETUP(null), HOME(null), TUNING(HOME), SETTINGS(HOME), CALIBRATION(HOME),
+    DIAGNOSTICS(SETTINGS), QUICK_TOGGLE(SETTINGS), SHAPE(TUNING), HUE(TUNING),
+}
 
 class MainActivity : ComponentActivity() {
 
@@ -33,8 +36,8 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf(if (settings.setupDone) Screen.HOME else Screen.SETUP)
                 }
                 var setupStartStep by rememberSaveable { mutableStateOf(0) }
-                BackHandler(enabled = screen != Screen.SETUP && screen != Screen.HOME) {
-                    screen = if (screen == Screen.DIAGNOSTICS) Screen.SETTINGS else Screen.HOME
+                BackHandler(enabled = screen.parent != null) {
+                    screen = screen.parent ?: Screen.HOME
                 }
                 // Surface setzt die Textfarbe für alles darin. Ohne sie zeichnet
                 // tv-material Text schwarz (auf dunklem Hintergrund unsichtbar).
@@ -62,7 +65,14 @@ class MainActivity : ComponentActivity() {
                             onCalibrate = { screen = Screen.CALIBRATION },
                             onSettings = { screen = Screen.SETTINGS },
                         )
-                        Screen.TUNING -> TuningScreen(repo = repo)
+                        Screen.TUNING -> TuningScreen(
+                            repo = repo,
+                            onShape = { screen = Screen.SHAPE },
+                            onHue = { screen = Screen.HUE },
+                        )
+                        Screen.SHAPE -> ShapeEditorScreen(repo = repo)
+                        Screen.HUE -> HueMatchScreen(repo = repo, onDone = { screen = Screen.TUNING })
+                        Screen.QUICK_TOGGLE -> QuickToggleScreen()
                         Screen.CALIBRATION -> CalibrationScreen(repo = repo)
                         Screen.DIAGNOSTICS -> DiagnosticsScreen(repo = repo)
                         Screen.SETTINGS -> SettingsScreen(
@@ -70,6 +80,7 @@ class MainActivity : ComponentActivity() {
                             onPermission = { setupStartStep = 1; screen = Screen.SETUP },
                             onRestartSetup = { setupStartStep = 0; screen = Screen.SETUP },
                             onDiagnostics = { screen = Screen.DIAGNOSTICS },
+                            onQuickToggle = { screen = Screen.QUICK_TOGGLE },
                         )
                     }
                 }

@@ -96,7 +96,7 @@ class OverlayService : LifecycleService() {
             repo.bypass.collect { b -> view?.visibility = if (b) android.view.View.INVISIBLE else android.view.View.VISIBLE }
         }
         // Gespeicherte Karte laden, wenn sich die aktive Karte ändert.
-        val activeMap = repo.settings.map { it.activeMapId }.distinctUntilChanged().map { id ->
+        val activeMap = repo.settings.map { it.current.activeMapId }.distinctUntilChanged().map { id ->
             id?.let { withContext(Dispatchers.IO) { mapStore.load(it) } }
         }
         val source = combine(repo.settings, repo.calibration, activeMap, repo.testFrame) { s, cal, map, test ->
@@ -276,10 +276,11 @@ class OverlayService : LifecycleService() {
             }
         }
         if (!s.enabled) return MaskSource.None
-        return if (s.useMap && active != null) {
-            MaskSource.Map(active, s.mapVariant, s.mapStrength)
+        val p = s.current
+        return if (p.mapActive && active != null) {
+            MaskSource.Map(active, p.mapVariant, p.mapStrength)
         } else {
-            MaskSource.Param(s.params)
+            MaskSource.Param(p.params)
         }
     }
 

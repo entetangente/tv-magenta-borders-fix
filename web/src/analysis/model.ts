@@ -1,4 +1,4 @@
-import { chromaDistance, chromaVector, srgbToLinear, type Vec3 } from './color';
+import { chromaDistance, srgbToLinear, type Vec3 } from './color';
 import { gaussBlur, GW, GH, isCenterCell, smoothstep } from './grid';
 
 /** Ein ausgewertetes Foto: angezeigter Grauwert (kodiert) und Rasterwerte (kodiert, Kamera). */
@@ -105,4 +105,3 @@ export function nearestLevel(model: PanelModel, level: number): number {
   return best;
 }
 
-export { chromaVector };

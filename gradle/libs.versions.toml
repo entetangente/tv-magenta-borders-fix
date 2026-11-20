@@ -9,8 +9,10 @@ lifecycle = "2.9.4"
 coroutines = "1.10.2"
 dadb = "1.2.10"
 junit = "4.13.2"
+paparazzi = "2.0.0-alpha02"
 nanohttpd = "2.3.1"
 zxing = "3.5.3"
+orgjson = "20240303"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -28,9 +30,11 @@ dadb = { module = "dev.mobile:dadb", version.ref = "dadb" }
 junit = { module = "junit:junit", version.ref = "junit" }
 nanohttpd = { module = "org.nanohttpd:nanohttpd", version.ref = "nanohttpd" }
 nanohttpd-websocket = { module = "org.nanohttpd:nanohttpd-websocket", version.ref = "nanohttpd" }
+orgjson = { module = "org.json:json", version.ref = "orgjson" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+paparazzi = { id = "app.cash.paparazzi", version.ref = "paparazzi" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

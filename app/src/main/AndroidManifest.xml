@@ -44,6 +44,19 @@
                 android:value="Dauerhaftes Farbkorrektur-Overlay für die Bildränder" />
         </service>
 
+        <service
+            android:name=".quick.QuickToggleService"
+            android:exported="true"
+            android:label="@string/quick_toggle_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/quick_toggle" />
+        </service>
+
         <receiver
             android:name=".overlay.BootReceiver"
             android:exported="true">

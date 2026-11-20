@@ -67,7 +67,7 @@ fun DiagnosticsScreen(repo: SettingsRepository) {
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             fun line(label: String, value: String, ok: Boolean? = null) = item {
                 Row {
-                    Text(label, fontSize = 18.sp, modifier = Modifier.width(200.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(label, fontSize = 18.sp, modifier = Modifier.width(230.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(
                         value,
                         fontSize = 18.sp,

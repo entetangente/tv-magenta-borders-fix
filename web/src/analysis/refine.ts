@@ -1,5 +1,5 @@
 import { chromaDistance, chromaVector, type Vec3 } from './color';
-import { gaussBlur, GW, GH } from './grid';
+import { gaussBlur } from './grid';
 import { cellsToLinear, centerRef, nearestLevel, type Capture, type PanelModel } from './model';
 import { predict, type CorrectionMap } from './solve';
 import { percentile } from './image';
@@ -124,4 +124,3 @@ export function refineModel(
   };
 }
 
-export { GW, GH };

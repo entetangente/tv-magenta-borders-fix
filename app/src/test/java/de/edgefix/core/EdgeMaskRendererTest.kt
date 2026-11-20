@@ -10,7 +10,7 @@ class EdgeMaskRendererTest {
 
     @Test
     fun centerIsExactlyZero() {
-        val px = EdgeMaskRenderer.render(EdgeParams(), w, h)
+        val px = EdgeMaskRenderer.render(EdgeParams(width = Edges.all(0.06f)), w, h)
         val wPx = (0.06f * h).toInt() + 1
         for (y in wPx until h - wPx) for (x in wPx until w - wPx) {
             assertEquals("Pixel $x,$y", 0, px[y * w + x])
@@ -19,13 +19,13 @@ class EdgeMaskRendererTest {
 
     @Test
     fun zeroStrengthGivesEmptyMask() {
-        val px = EdgeMaskRenderer.render(EdgeParams(aMax = 0f), w, h)
+        val px = EdgeMaskRenderer.render(EdgeParams(width = Edges.all(0.06f), aMax = 0f), w, h)
         assertTrue(px.all { it == 0 })
     }
 
     @Test
     fun alphaIsMonotonicTowardsEdge() {
-        val a = EdgeMaskRenderer.alpha(EdgeParams(), w, h)
+        val a = EdgeMaskRenderer.alpha(EdgeParams(width = Edges.all(0.06f)), w, h)
         val x = w / 2
         for (y in 1 until h / 2) {
             assertTrue("y=$y", a[(y - 1) * w + x] >= a[y * w + x])
@@ -34,14 +34,14 @@ class EdgeMaskRendererTest {
 
     @Test
     fun cornersAreStrongerThanEdgeMiddles() {
-        val a = EdgeMaskRenderer.alpha(EdgeParams(), w, h)
+        val a = EdgeMaskRenderer.alpha(EdgeParams(width = Edges.all(0.06f)), w, h)
         assertTrue(a[0] > a[w / 2])
         assertTrue(a[0] > a[(h / 2) * w])
     }
 
     @Test
     fun maxAlphaMatchesAMaxAtEdgeMiddle() {
-        val p = EdgeParams(aMax = 0.2f, curve = Curve.LINEAR)
+        val p = EdgeParams(width = Edges.all(0.06f), aMax = 0.2f, curve = Curve.LINEAR)
         val a = EdgeMaskRenderer.alpha(p, w, h)
         val top = a[w / 2] // Abstand 0.5 px zur Oberkante
         assertEquals(0.2f * (1f - 0.5f / (0.06f * h)), top, 1e-4f)
@@ -49,7 +49,7 @@ class EdgeMaskRendererTest {
 
     @Test
     fun symmetricForSymmetricParams() {
-        val a = EdgeMaskRenderer.alpha(EdgeParams(), w, h)
+        val a = EdgeMaskRenderer.alpha(EdgeParams(width = Edges.all(0.06f)), w, h)
         for (y in 0 until h) for (x in 0 until w) {
             assertEquals(a[y * w + x], a[y * w + (w - 1 - x)], 1e-6f)
             assertEquals(a[y * w + x], a[(h - 1 - y) * w + x], 1e-6f)
@@ -58,7 +58,7 @@ class EdgeMaskRendererTest {
 
     @Test
     fun premultipliedChannelsNeverExceedAlpha() {
-        val px = EdgeMaskRenderer.render(EdgeParams(aMax = 0.4f, k = 1f, strength = Edges.all(1.5f)), w, h)
+        val px = EdgeMaskRenderer.render(EdgeParams(width = Edges.all(0.06f), aMax = 0.4f, k = 1f, strength = Edges.all(1.5f)), w, h)
         for (v in px) {
             val a = v ushr 24
             assertTrue((v ushr 16 and 0xff) <= a)
@@ -69,7 +69,7 @@ class EdgeMaskRendererTest {
 
     @Test
     fun kZeroIsPureDarkening() {
-        val px = EdgeMaskRenderer.render(EdgeParams(k = 0f), w, h)
+        val px = EdgeMaskRenderer.render(EdgeParams(width = Edges.all(0.06f), k = 0f), w, h)
         assertTrue(px.any { it != 0 })
         assertTrue(px.all { (it and 0xffffff) == 0 })
     }

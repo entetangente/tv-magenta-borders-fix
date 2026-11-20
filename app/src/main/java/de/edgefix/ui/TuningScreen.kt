@@ -39,6 +39,7 @@ import de.edgefix.core.Edge
 import de.edgefix.core.EdgeParams
 import de.edgefix.core.get
 import de.edgefix.core.with
+import de.edgefix.store.Profile
 import de.edgefix.store.SettingsRepository
 import kotlin.math.roundToInt
 
@@ -61,19 +62,21 @@ private fun Float.stepTo(d: Int, step: Float, min: Float, max: Float): Float =
     ((this / step).roundToInt() + d).times(step).coerceIn(min, max)
 
 @Composable
-fun TuningScreen(repo: SettingsRepository) {
+fun TuningScreen(repo: SettingsRepository, onShape: () -> Unit, onHue: () -> Unit) {
     val settings by repo.settings.collectAsStateWithLifecycle()
     val bypass by repo.bypass.collectAsStateWithLifecycle()
-    val p = settings.params
-    val useMap = settings.useMap && settings.activeMapId != null
+    val prof = settings.current
+    val p = prof.params
+    val useMap = prof.mapActive
     var pattern by rememberSaveable { mutableStateOf(TestPattern.WHITE) }
     var expert by rememberSaveable { mutableStateOf(false) }
     var panelHidden by rememberSaveable { mutableStateOf(false) }
     val firstFocus = remember { FocusRequester() }
     val hiddenFocus = remember { FocusRequester() }
 
+    fun setProfile(transform: (Profile) -> Profile) = repo.update { it.withCurrent(transform) }
     fun set(transform: (EdgeParams) -> EdgeParams) =
-        repo.update { it.copy(params = transform(it.params).clamped(), lastTuned = System.currentTimeMillis()) }
+        setProfile { it.copy(params = transform(it.params).clamped(), lastTuned = System.currentTimeMillis()) }
 
     LaunchedEffect(panelHidden) {
         runCatching { if (panelHidden) hiddenFocus.requestFocus() else firstFocus.requestFocus() }
@@ -146,7 +149,7 @@ fun TuningScreen(repo: SettingsRepository) {
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Feinabstimmung", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Text("Feinabstimmung · ${settings.profile.label}", fontSize = 28.sp, fontWeight = FontWeight.Bold)
             if (!de.edgefix.overlay.OverlayPermission.granted(androidx.compose.ui.platform.LocalContext.current)) {
                 Text(
                     "Berechtigung fehlt: Die Korrektur wird nicht angezeigt. Einstellungen → Berechtigung einrichten.",
@@ -155,28 +158,28 @@ fun TuningScreen(repo: SettingsRepository) {
                 )
             }
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (settings.activeMapId != null) {
+                if (prof.activeMapId != null) {
                     item {
                         ChoiceRow(
-                            "Korrektur", listOf(true, false), settings.useMap,
+                            "Korrektur", listOf(true, false), prof.useMap,
                             { if (it) "Gemessen" else "Einfache Randmaske" },
-                            { v -> repo.update { it.copy(useMap = v) } },
+                            { v -> setProfile { it.copy(useMap = v) } },
                         )
                     }
                 }
                 if (useMap) {
                     item {
                         ValueRow(
-                            "Stärke", pct(settings.mapStrength), settings.mapStrength / 1.5f,
-                            { d -> repo.update { it.copy(mapStrength = it.mapStrength.stepTo(d, 0.05f, 0f, 1.5f)) } },
+                            "Stärke", pct(prof.mapStrength), prof.mapStrength / 1.5f,
+                            { d -> setProfile { it.copy(mapStrength = it.mapStrength.stepTo(d, 0.05f, 0f, 1.5f)) } },
                             Modifier.focusRequester(firstFocus),
                         )
                     }
                     item {
                         ChoiceRow(
-                            "Schutz für dunkle Szenen", listOf(0, 1, 2), settings.mapVariant,
+                            "Schutz für dunkle Szenen", listOf(0, 1, 2), prof.mapVariant,
                             { listOf("niedrig", "mittel", "hoch")[it] },
-                            { v -> repo.update { it.copy(mapVariant = v) } },
+                            { v -> setProfile { it.copy(mapVariant = v) } },
                         )
                     }
                 } else {
@@ -200,11 +203,19 @@ fun TuningScreen(repo: SettingsRepository) {
                 item {
                     ActionRow("Bedienfeld ausblenden", { panelHidden = true }, description = "Beliebige Taste blendet es wieder ein")
                 }
-                if (!useMap) item {
-                    ToggleRow("Experte", expert, { expert = !expert }, description = "Farbton, Randbreiten, Verlauf")
+                if (!useMap) {
+                    item {
+                        ActionRow("Rand nachzeichnen", onShape, description = "Breite und Stärke an 16 Punkten je Kante, per Auge")
+                    }
+                    item {
+                        ActionRow("Farbton angleichen", onHue, description = "Lila an 8 Stellen mit einem Vergleichsfeld abgleichen")
+                    }
+                    item {
+                        ToggleRow("Experte", expert, { expert = !expert }, description = "Farbton, Randbreiten, Verlauf")
+                    }
                 }
                 if (expert && !useMap) {
-                    item {
+                    if (p.shape?.spotHue == null) item {
                         ValueRow(
                             "Farbton", "${p.hueDeg.roundToInt()}° ${hueName(p.hueDeg)}", p.hueDeg / 360f,
                             { d -> set { it.copy(hueDeg = ((it.hueDeg.roundToInt() + d * 5 + 360) % 360).toFloat()) } },
@@ -213,16 +224,23 @@ fun TuningScreen(repo: SettingsRepository) {
                     item {
                         ChoiceRow("Verlauf", Curve.entries, p.curve, { it.label }, { c -> set { it.copy(curve = c) } })
                     }
-                    for (e in Edge.entries) {
+                    if (p.shape != null) item {
+                        ActionRow(
+                            "Detailform verwerfen",
+                            { set { it.copy(shape = null) } },
+                            description = "Zurück zu einheitlicher Breite und Stärke je Kante",
+                        )
+                    }
+                    if (p.shape == null) for (e in Edge.entries) {
                         item(key = "w$e") {
                             val v = p.width.get(e)
                             ValueRow(
                                 "Breite ${e.label}", pct(v, 1), v / EdgeParams.MAX_WIDTH,
-                                { d -> set { it.copy(width = it.width.with(e, it.width.get(e).stepTo(d, 0.005f, 0f, EdgeParams.MAX_WIDTH))) } },
+                                { d -> set { it.copy(width = it.width.with(e, it.width.get(e).stepTo(d, 0.001f, 0f, EdgeParams.MAX_WIDTH))) } },
                             )
                         }
                     }
-                    for (e in Edge.entries) {
+                    if (p.shape == null) for (e in Edge.entries) {
                         item(key = "s$e") {
                             val v = p.strength.get(e)
                             ValueRow(

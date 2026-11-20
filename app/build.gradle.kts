@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.paparazzi)
 }
 
 android {
@@ -79,4 +80,6 @@ dependencies {
     testImplementation(libs.junit)
     // nur zum Vergleich des Schlüsselformats in AdbKeysTest
     testImplementation(libs.dadb)
+    // echtes org.json für Tests (Android stellt es nur zur Laufzeit bereit)
+    testImplementation(libs.orgjson)
 }

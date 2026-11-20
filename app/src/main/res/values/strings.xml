@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">EdgeFix</string>
+    <string name="quick_toggle_label">EdgeFix Schnellumschaltung</string>
+    <string name="quick_toggle_description">Menü-Taste lange drücken schaltet die Randkorrektur von EdgeFix ein und aus. Liest keine Bildschirminhalte.</string>
 </resources>

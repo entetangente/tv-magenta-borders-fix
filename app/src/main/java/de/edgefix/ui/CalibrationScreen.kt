@@ -128,7 +128,8 @@ fun CalibrationScreen(repo: SettingsRepository) {
                 )
             }
             // fokussierbares Element, damit Zurück zuverlässig ankommt
-            BigButton("Fertig", { (context as? android.app.Activity)?.onBackPressed() }, Modifier.focusRequester(focus), primary = false)
+            val back = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
+            BigButton("Fertig", { back?.onBackPressed() }, Modifier.focusRequester(focus), primary = false)
             KeyHints("Zurück: Kalibrierung beenden")
         }
         if (ip != null && server != null && OverlayPermission.granted(context)) {

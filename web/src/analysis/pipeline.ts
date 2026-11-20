@@ -1,4 +1,4 @@
-import { buildModel, type Capture, type PanelModel } from './model';
+import type { PanelModel } from './model';
 import { DEFAULT_SOLVE, predictedError, solveMap, type CorrectionMap, type SolveOptions } from './solve';
 import { percentile } from './image';
 
@@ -37,8 +37,4 @@ export function computeMaps(model: PanelModel, opt: Partial<SolveOptions> = {}, 
   const after95 = maps.map((m) => pick(predictedError(model, m, 0)));
   const coverage = maps[1].a.reduce((s, v) => s + (v > 0 ? 1 : 0), 0) / maps[1].a.length;
   return { maps, before95, after95, coverage };
-}
-
-export function modelFromCaptures(captures: Capture[]): PanelModel {
-  return buildModel(captures);
 }

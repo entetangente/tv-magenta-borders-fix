@@ -13,6 +13,10 @@ import kotlin.math.floor
  *
  *     a = 1 − (1 − a_oben)(1 − a_unten)(1 − a_links)(1 − a_rechts)
  *
+ * Mit Detailform (Abgleich per Auge) hängen w_e, s_e und die Gegenfarbe H von
+ * der Position entlang der Kante ab; die Farbe ist dann der mit a_e gewichtete
+ * Mittelwert der Kantenfarben.
+ *
  * Die Overlay-Farbe ist O = k · H mit der Gegenfarbe H. Ausgabe ist ARGB mit
  * vormultipliziertem Alpha, also (a, a·k·H_r, a·k·H_g, a·k·H_b).
  *
@@ -56,41 +60,101 @@ object EdgeMaskRenderer {
         return floatArrayOf(r + m, g + m, b + m)
     }
 
-    /** Deckkraft-Profil entlang einer Achse für eine Kante. Index = Abstand in Pixeln. */
-    private fun edgeProfile(length: Int, widthPx: Float, gain: Float, curve: Curve): FloatArray {
-        val out = FloatArray(length)
-        if (widthPx <= 0f || gain <= 0f) return out
+    /**
+     * Werte einer Kante entlang ihrer Länge: Breite in Pixeln, Verstärkung
+     * (a_max · Stärke · Spot-Verstärkung) und Gegenfarbe H je Position.
+     */
+    private class EdgeLine(val widthPx: FloatArray, val gain: FloatArray, val r: FloatArray, val g: FloatArray, val b: FloatArray) {
+        val maxWidth = widthPx.maxOrNull() ?: 0f
+    }
+
+    private fun edgeLine(p: EdgeParams, e: Edge, length: Int, heightPx: Float): EdgeLine {
+        val shape = p.shape
+        val wArr = FloatArray(length)
+        val gArr = FloatArray(length)
+        val rArr = FloatArray(length)
+        val gnArr = FloatArray(length)
+        val bArr = FloatArray(length)
+        val (s0, s1, s2) = Spot.along(e)
+        val hues = shape?.spotHue
+        val gains = shape?.spotGain
+        val fixed = hueColor(p.hueDeg)
         for (i in 0 until length) {
-            val d = i + 0.5f
-            val t = 1f - d / widthPx
-            if (t <= 0f) break
-            out[i] = (gain * curve.apply(t)).coerceAtMost(1f)
+            val t = (i + 0.5f) / length
+            val width = shape?.width?.get(e)?.let { EdgeShape.spline(it, t) } ?: p.width.get(e)
+            val strength = shape?.strength?.get(e)?.let { EdgeShape.spline(it, t) } ?: p.strength.get(e)
+            val spotGain = gains?.let {
+                if (t < 0.5f) it[s0.ordinal] + (it[s1.ordinal] - it[s0.ordinal]) * t * 2
+                else it[s1.ordinal] + (it[s2.ordinal] - it[s1.ordinal]) * (t - 0.5f) * 2
+            } ?: 1f
+            wArr[i] = width * heightPx
+            gArr[i] = p.aMax * strength * spotGain
+            val c = hues?.let {
+                val h = if (t < 0.5f) lerpHue(it[s0.ordinal], it[s1.ordinal], t * 2)
+                else lerpHue(it[s1.ordinal], it[s2.ordinal], (t - 0.5f) * 2)
+                hueColor(h)
+            } ?: fixed
+            rArr[i] = c[0]; gnArr[i] = c[1]; bArr[i] = c[2]
         }
-        return out
+        return EdgeLine(wArr, gArr, rArr, gnArr, bArr)
+    }
+
+    /** Deckkraft einer Kante bei Abstand d (Pixelmitte) an Position i. */
+    private fun edgeAlpha(l: EdgeLine, i: Int, d: Float, curve: Curve): Float {
+        val w = l.widthPx[i]
+        if (w <= 0f) return 0f
+        val t = 1f - d / w
+        if (t <= 0f) return 0f
+        return (l.gain[i] * curve.apply(t)).coerceAtMost(1f)
     }
 
     /**
-     * Liefert nur die Deckkraft a (0–1) je Pixel, ohne Quantisierung. Für Tests
-     * und für spätere Kombination mit einer Korrekturkarte.
+     * Berechnet je Pixel Deckkraft und (optional) die gemischte Gegenfarbe.
+     * [out] erhält für jeden Pixel mit a > 0: Index, a, H_r, H_g, H_b.
+     */
+    private inline fun compute(p0: EdgeParams, width: Int, height: Int, out: (i: Int, a: Float, r: Float, g: Float, b: Float) -> Unit) {
+        val p = p0.clamped()
+        val hPx = height.toFloat()
+        val top = edgeLine(p, Edge.TOP, width, hPx)
+        val bottom = edgeLine(p, Edge.BOTTOM, width, hPx)
+        val left = edgeLine(p, Edge.LEFT, height, hPx)
+        val right = edgeLine(p, Edge.RIGHT, height, hPx)
+        val c = p.curve
+        val lw = kotlin.math.ceil(left.maxWidth).toInt()
+        val rw = kotlin.math.ceil(right.maxWidth).toInt()
+        val tw = kotlin.math.ceil(top.maxWidth).toInt()
+        val bw = kotlin.math.ceil(bottom.maxWidth).toInt()
+        for (y in 0 until height) {
+            val fullRow = y < tw || y >= height - bw
+            var x = 0
+            while (x < width) {
+                // Außerhalb aller Randbereiche ist a exakt 0: diese Pixel überspringen.
+                if (!fullRow && x >= lw && x < width - rw) { x = width - rw; continue }
+                val aT = edgeAlpha(top, x, y + 0.5f, c)
+                val aB = edgeAlpha(bottom, x, height - y - 0.5f, c)
+                val aL = edgeAlpha(left, y, x + 0.5f, c)
+                val aR = edgeAlpha(right, y, width - x - 0.5f, c)
+                val rk = (1f - aT) * (1f - aB)
+                val ck = (1f - aL) * (1f - aR)
+                val a = 1f - rk * ck
+                if (a > 0f) {
+                    val s = aT + aB + aL + aR
+                    val r = (aT * top.r[x] + aB * bottom.r[x] + aL * left.r[y] + aR * right.r[y]) / s
+                    val g = (aT * top.g[x] + aB * bottom.g[x] + aL * left.g[y] + aR * right.g[y]) / s
+                    val b = (aT * top.b[x] + aB * bottom.b[x] + aL * left.b[y] + aR * right.b[y]) / s
+                    out(y * width + x, a, r, g, b)
+                }
+                x++
+            }
+        }
+    }
+
+    /**
+     * Liefert nur die Deckkraft a (0–1) je Pixel, ohne Quantisierung (für Tests).
      */
     fun alpha(p: EdgeParams, width: Int, height: Int): FloatArray {
-        val params = p.clamped()
-        val rowKeep = FloatArray(height) { 1f }
-        val colKeep = FloatArray(width) { 1f }
-        val hPx = height.toFloat()
-        val top = edgeProfile(height, params.width.top * hPx, params.aMax * params.strength.top, params.curve)
-        val bottom = edgeProfile(height, params.width.bottom * hPx, params.aMax * params.strength.bottom, params.curve)
-        val left = edgeProfile(width, params.width.left * hPx, params.aMax * params.strength.left, params.curve)
-        val right = edgeProfile(width, params.width.right * hPx, params.aMax * params.strength.right, params.curve)
-        for (y in 0 until height) rowKeep[y] = (1f - top[y]) * (1f - bottom[height - 1 - y])
-        for (x in 0 until width) colKeep[x] = (1f - left[x]) * (1f - right[width - 1 - x])
         val a = FloatArray(width * height)
-        for (y in 0 until height) {
-            val rk = rowKeep[y]
-            val base = y * width
-            // Außerhalb aller Randbereiche ist rk = ck = 1 und damit a exakt 0.
-            for (x in 0 until width) a[base + x] = 1f - rk * colKeep[x]
-        }
+        compute(p, width, height) { i, al, _, _, _ -> a[i] = al }
         return a
     }
 
@@ -98,15 +162,19 @@ object EdgeMaskRenderer {
      * Fertige Maske als ARGB-Ints mit vormultipliziertem Alpha (0xAARRGGBB).
      */
     fun render(p: EdgeParams, width: Int, height: Int): IntArray {
-        val params = p.clamped()
-        val a = alpha(params, width, height)
-        val hc = hueColor(params.hueDeg)
-        val kr = params.k * hc[0]
-        val kg = params.k * hc[1]
-        val kb = params.k * hc[2]
-        return quantize(a, width, height) { _, alpha, out ->
-            out[0] = alpha * kr; out[1] = alpha * kg; out[2] = alpha * kb
+        val k = p.clamped().k
+        val px = IntArray(width * height)
+        val zeroBelow = 0.5f / 255f
+        compute(p, width, height) { i, a, r, g, b ->
+            if (a < zeroBelow) return@compute
+            val x = i % width
+            val y = i / width
+            val d = ditherOffset(x, y)
+            val a8 = q(a, d, 255)
+            if (a8 == 0) return@compute
+            px[i] = (a8 shl 24) or (q(a * k * r, d, a8) shl 16) or (q(a * k * g, d, a8) shl 8) or q(a * k * b, d, a8)
         }
+        return px
     }
 
     /**

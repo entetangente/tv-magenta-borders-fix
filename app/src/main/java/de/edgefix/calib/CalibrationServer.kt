@@ -207,16 +207,18 @@ class CalibrationServer(
         val bytes = cal.previewBytes ?: return
         val id = mapStore.save(bytes, previewMeta)
         val now = System.currentTimeMillis()
+        // Übernahme ins gerade aktive Profil (SDR oder HDR).
         repo.update {
-            it.copy(
-                enabled = true,
-                useMap = true,
-                activeMapId = id,
-                mapStrength = cal.previewStrength,
-                mapVariant = cal.previewVariant,
-                lastCalibrated = now,
-                lastTuned = now,
-            )
+            it.copy(enabled = true).withCurrent { p ->
+                p.copy(
+                    useMap = true,
+                    activeMapId = id,
+                    mapStrength = cal.previewStrength,
+                    mapVariant = cal.previewVariant,
+                    lastCalibrated = now,
+                    lastTuned = now,
+                )
+            }
         }
         repo.setBypass(false)
         repo.updateCalibration { it?.copy(overlay = CalibrationOverlay.ACTIVE, stepText = "Übernommen ✓") }
