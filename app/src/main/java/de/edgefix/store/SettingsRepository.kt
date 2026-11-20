@@ -29,7 +29,8 @@ class SettingsRepository private constructor(context: Context) {
 
     fun update(transform: (Settings) -> Settings) {
         _settings.update(transform)
-        prefs.edit().putString(KEY, SettingsJson.encode(_settings.value)).apply()
+        // ?. nur für die Layout-Vorschau (Paparazzi), deren Editor null liefert
+        prefs.edit().putString(KEY, SettingsJson.encode(_settings.value))?.apply()
     }
 
     /** Diagnose: knallroten Testrahmen statt der Maske zeigen. Wird nicht gespeichert. */

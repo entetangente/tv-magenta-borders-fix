@@ -8,6 +8,9 @@ bei hellen Inhalten weniger auffällt. Die Bildmitte bleibt bitgenau unveränder
 - Overlay-Dienst mit Autostart (nach Einschalten, Standby und App-Update)
 - **Kalibrierung mit dem Handy:** QR-Code, 5 Fotos, Korrekturkarte 384×216, Nachmessen
 - **Feinabstimmung am Fernseher:** Stärke, Schutz für dunkle Szenen, Testbilder, Vorher/Nachher
+- **Drei Korrekturarten:** Gemessen (Karte vom Handy), Farbausgleich (Randmaske mit
+  Gegenfarbe) und **Nur abdunkeln** (Randmaske nur mit Schwarz: Schwarz bleibt schwarz,
+  in dunklen Szenen unsichtbar, bei hellen Bildern leuchtet der lila Rand schwächer)
 - **Abgleich per Auge ohne Handy:** Rand an 16 Punkten je Kante nachzeichnen (Breite, Stärke),
   Farbton an 8 Stellen mit einem Vergleichsfeld angleichen
 - **Profile SDR / HDR / Aus** mit eigenen Werten, manuell umschaltbar

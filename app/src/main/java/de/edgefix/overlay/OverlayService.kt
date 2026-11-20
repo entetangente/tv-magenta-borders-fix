@@ -277,10 +277,10 @@ class OverlayService : LifecycleService() {
         }
         if (!s.enabled) return MaskSource.None
         val p = s.current
-        return if (p.mapActive && active != null) {
-            MaskSource.Map(active, p.mapVariant, p.mapStrength)
-        } else {
-            MaskSource.Param(p.params)
+        return when {
+            p.darken -> MaskSource.Param(p.darkenParams())
+            p.mapActive && active != null -> MaskSource.Map(active, p.mapVariant, p.mapStrength)
+            else -> MaskSource.Param(p.params)
         }
     }
 

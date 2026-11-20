@@ -91,6 +91,7 @@ fun HomeScreen(repo: SettingsRepository, onTuning: () -> Unit, onCalibrate: () -
                             !hasPermission -> "Unter Einstellungen → Berechtigung einrichten"
                             prof.mapActive && prof.lastCalibrated != 0L -> "Profil ${settings.profile.label} · gemessene Korrektur vom " +
                                 DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(prof.lastCalibrated))
+                            prof.darken -> "Profil ${settings.profile.label} · Rand nur abdunkeln (${(prof.darkenStrength * 100).toInt()} %)"
                             prof.lastTuned == 0L -> "Profil ${settings.profile.label} · noch nicht abgestimmt"
                             else -> "Profil ${settings.profile.label} · Randmaske, abgestimmt am " +
                                 DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(prof.lastTuned))

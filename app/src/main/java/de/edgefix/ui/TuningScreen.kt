@@ -39,6 +39,7 @@ import de.edgefix.core.Edge
 import de.edgefix.core.EdgeParams
 import de.edgefix.core.get
 import de.edgefix.core.with
+import de.edgefix.store.CorrectionMode
 import de.edgefix.store.Profile
 import de.edgefix.store.SettingsRepository
 import kotlin.math.roundToInt
@@ -67,7 +68,9 @@ fun TuningScreen(repo: SettingsRepository, onShape: () -> Unit, onHue: () -> Uni
     val bypass by repo.bypass.collectAsStateWithLifecycle()
     val prof = settings.current
     val p = prof.params
-    val useMap = prof.mapActive
+    val mode = prof.mode
+    val useMap = mode == CorrectionMode.MAP
+    val darken = mode == CorrectionMode.DARKEN
     var pattern by rememberSaveable { mutableStateOf(TestPattern.WHITE) }
     var expert by rememberSaveable { mutableStateOf(false) }
     var panelHidden by rememberSaveable { mutableStateOf(false) }
@@ -158,43 +161,73 @@ fun TuningScreen(repo: SettingsRepository, onShape: () -> Unit, onHue: () -> Uni
                 )
             }
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (prof.activeMapId != null) {
-                    item {
-                        ChoiceRow(
-                            "Korrektur", listOf(true, false), prof.useMap,
-                            { if (it) "Gemessen" else "Einfache Randmaske" },
-                            { v -> setProfile { it.copy(useMap = v) } },
-                        )
-                    }
+                item {
+                    val modes = CorrectionMode.entries.filter { it != CorrectionMode.MAP || prof.activeMapId != null }
+                    ChoiceRow(
+                        "Korrektur", modes, mode, { it.label },
+                        { m -> setProfile { it.withMode(m) } },
+                        Modifier.focusRequester(firstFocus),
+                    )
                 }
-                if (useMap) {
-                    item {
-                        ValueRow(
-                            "Stärke", pct(prof.mapStrength), prof.mapStrength / 1.5f,
-                            { d -> setProfile { it.copy(mapStrength = it.mapStrength.stepTo(d, 0.05f, 0f, 1.5f)) } },
-                            Modifier.focusRequester(firstFocus),
-                        )
+                when (mode) {
+                    CorrectionMode.MAP -> {
+                        item {
+                            ValueRow(
+                                "Stärke", pct(prof.mapStrength), prof.mapStrength / 1.5f,
+                                { d -> setProfile { it.copy(mapStrength = it.mapStrength.stepTo(d, 0.05f, 0f, 1.5f)) } },
+                            )
+                        }
+                        item {
+                            ChoiceRow(
+                                "Schutz für dunkle Szenen", listOf(0, 1, 2), prof.mapVariant,
+                                { listOf("niedrig", "mittel", "hoch")[it] },
+                                { v -> setProfile { it.copy(mapVariant = v) } },
+                            )
+                        }
                     }
-                    item {
-                        ChoiceRow(
-                            "Schutz für dunkle Szenen", listOf(0, 1, 2), prof.mapVariant,
-                            { listOf("niedrig", "mittel", "hoch")[it] },
-                            { v -> setProfile { it.copy(mapVariant = v) } },
-                        )
+                    CorrectionMode.COLOR -> {
+                        item {
+                            ValueRow(
+                                "Stärke", pct(p.aMax), p.aMax / EdgeParams.MAX_A,
+                                { d -> set { it.copy(aMax = it.aMax.stepTo(d, 0.01f, 0f, EdgeParams.MAX_A)) } },
+                            )
+                        }
+                        item {
+                            ValueRow(
+                                "Schutz für dunkle Szenen", pct(1f - p.k), 1f - p.k,
+                                { d -> set { it.copy(k = (1f - (1f - it.k).stepTo(d, 0.05f, 0f, 1f))) } },
+                            )
+                        }
                     }
-                } else {
-                    item {
-                        ValueRow(
-                            "Stärke", pct(p.aMax), p.aMax / EdgeParams.MAX_A,
-                            { d -> set { it.copy(aMax = it.aMax.stepTo(d, 0.01f, 0f, EdgeParams.MAX_A)) } },
-                            Modifier.focusRequester(firstFocus),
-                        )
-                    }
-                    item {
-                        ValueRow(
-                            "Schutz für dunkle Szenen", pct(1f - p.k), 1f - p.k,
-                            { d -> set { it.copy(k = (1f - (1f - it.k).stepTo(d, 0.05f, 0f, 1f))) } },
-                        )
+                    CorrectionMode.DARKEN -> {
+                        item {
+                            ValueRow(
+                                "Abdunkeln", pct(prof.darkenStrength), prof.darkenStrength / Profile.MAX_DARKEN,
+                                { d ->
+                                    setProfile {
+                                        it.copy(
+                                            darkenStrength = it.darkenStrength.stepTo(d, 0.02f, 0f, Profile.MAX_DARKEN),
+                                            lastTuned = System.currentTimeMillis(),
+                                        )
+                                    }
+                                },
+                            )
+                        }
+                        if (p.shape == null) item {
+                            val avg = (p.width.top + p.width.bottom + p.width.left + p.width.right) / 4f
+                            ValueRow(
+                                "Breite (alle Kanten)", pct(avg, 1), avg / EdgeParams.MAX_WIDTH,
+                                { d ->
+                                    set {
+                                        val v = avg.stepTo(d, 0.001f, 0f, EdgeParams.MAX_WIDTH)
+                                        it.copy(width = de.edgefix.core.Edges.all(v))
+                                    }
+                                },
+                            )
+                        }
+                        item {
+                            ChoiceRow("Verlauf", Curve.entries, p.curve, { it.label }, { c -> set { it.copy(curve = c) } })
+                        }
                     }
                 }
                 item {
@@ -207,7 +240,7 @@ fun TuningScreen(repo: SettingsRepository, onShape: () -> Unit, onHue: () -> Uni
                     item {
                         ActionRow("Rand nachzeichnen", onShape, description = "Breite und Stärke an 16 Punkten je Kante, per Auge")
                     }
-                    item {
+                    if (!darken) item {
                         ActionRow("Farbton angleichen", onHue, description = "Lila an 8 Stellen mit einem Vergleichsfeld abgleichen")
                     }
                     item {
@@ -215,13 +248,13 @@ fun TuningScreen(repo: SettingsRepository, onShape: () -> Unit, onHue: () -> Uni
                     }
                 }
                 if (expert && !useMap) {
-                    if (p.shape?.spotHue == null) item {
+                    if (!darken && p.shape?.spotHue == null) item {
                         ValueRow(
                             "Farbton", "${p.hueDeg.roundToInt()}° ${hueName(p.hueDeg)}", p.hueDeg / 360f,
                             { d -> set { it.copy(hueDeg = ((it.hueDeg.roundToInt() + d * 5 + 360) % 360).toFloat()) } },
                         )
                     }
-                    item {
+                    if (!darken) item {
                         ChoiceRow("Verlauf", Curve.entries, p.curve, { it.label }, { c -> set { it.copy(curve = c) } })
                     }
                     if (p.shape != null) item {

@@ -169,7 +169,8 @@ fun ShapeEditorScreen(repo: SettingsRepository) {
                 fontSize = 17.sp, color = Color(0xFFB8BEC6),
             )
             Text(
-                "Gesamtstärke ${(p.aMax * 100).roundToInt()} % (in der Feinabstimmung)",
+                if (settings.current.darken) "Abdunkeln ${(settings.current.darkenStrength * 100).roundToInt()} % (in der Feinabstimmung)"
+                else "Gesamtstärke ${(p.aMax * 100).roundToInt()} % (in der Feinabstimmung)",
                 fontSize = 17.sp, color = Color(0xFFB8BEC6),
             )
         }

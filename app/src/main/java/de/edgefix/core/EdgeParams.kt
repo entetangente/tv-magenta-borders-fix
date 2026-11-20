@@ -65,7 +65,7 @@ data class EdgeParams(
     val shape: EdgeShape? = null,
 ) {
     fun clamped(): EdgeParams = copy(
-        aMax = aMax.coerceIn(0f, MAX_A),
+        aMax = aMax.coerceIn(0f, MAX_A_ANY),
         k = k.coerceIn(0f, 1f),
         hueDeg = ((hueDeg % 360f) + 360f) % 360f,
         width = width.map { it.coerceIn(0f, MAX_WIDTH) },
@@ -75,6 +75,8 @@ data class EdgeParams(
 
     companion object {
         const val MAX_A = 0.40f
+        /** obere Grenze inklusive „Nur abdunkeln“ */
+        const val MAX_A_ANY = 0.80f
         const val MAX_WIDTH = 0.20f
         const val MAX_STRENGTH = 1.5f
     }

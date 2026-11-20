@@ -50,6 +50,10 @@ class ScreensSnapshotTest {
     @Test fun home() = shot { HomeScreen(it, {}, {}, {}) }
     @Test fun settings() = shot { SettingsScreen(it, {}, {}, {}, {}) }
     @Test fun tuning() = shot { TuningScreen(it, {}, {}) }
+    @Test fun tuningDarken() = shot { repo ->
+        repo.update { s -> s.withCurrent { it.withMode(de.edgefix.store.CorrectionMode.DARKEN) } }
+        TuningScreen(repo, {}, {})
+    }
     @Test fun setup() = shot { SetupScreen(it, startStep = 1, onDone = {}, onExit = null) }
     @Test fun quickToggle() = shot { QuickToggleScreen() }
     @Test fun shapeEditor() = shot { ShapeEditorScreen(it) }

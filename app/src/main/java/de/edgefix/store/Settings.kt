@@ -14,6 +14,16 @@ enum class ProfileId(val label: String) {
     HDR("HDR"),
 }
 
+/** Art der Korrektur. */
+enum class CorrectionMode(val label: String) {
+    /** gemessene Korrekturkarte (Handy-Kalibrierung) */
+    MAP("Gemessen"),
+    /** Randmaske mit Gegenfarbe (Feinabstimmung, Abgleich per Auge) */
+    COLOR("Farbausgleich"),
+    /** Randmaske nur mit Schwarz: Rand etwas dunkler, Schwarz bleibt schwarz */
+    DARKEN("Nur abdunkeln"),
+}
+
 /** Alle Werte eines Profils. */
 data class Profile(
     /** parametrische Randmaske (Feinabstimmung, Abgleich per Auge) */
@@ -30,9 +40,33 @@ data class Profile(
     val lastTuned: Long = 0L,
     /** Zeitpunkt der letzten Kalibrierung mit dem Handy (ms), 0 = nie. */
     val lastCalibrated: Long = 0L,
+    /** Nur abdunkeln statt Farbausgleich (nutzt Breite, Verlauf und Form der Randmaske). */
+    val darken: Boolean = false,
+    /** Stärke beim Abdunkeln: Deckkraft von Schwarz direkt am Rand, 0–0.8. */
+    val darkenStrength: Float = 0.3f,
 ) {
     /** Karte wird tatsächlich verwendet. */
-    val mapActive: Boolean get() = useMap && activeMapId != null
+    val mapActive: Boolean get() = !darken && useMap && activeMapId != null
+
+    val mode: CorrectionMode
+        get() = when {
+            darken -> CorrectionMode.DARKEN
+            mapActive -> CorrectionMode.MAP
+            else -> CorrectionMode.COLOR
+        }
+
+    fun withMode(m: CorrectionMode): Profile = when (m) {
+        CorrectionMode.MAP -> copy(darken = false, useMap = true)
+        CorrectionMode.COLOR -> copy(darken = false, useMap = false)
+        CorrectionMode.DARKEN -> copy(darken = true)
+    }
+
+    /** Parameter der Abdunkel-Maske: Form wie die Randmaske, aber nur Schwarz. */
+    fun darkenParams(): EdgeParams = params.copy(k = 0f, aMax = darkenStrength)
+
+    companion object {
+        const val MAX_DARKEN = 0.8f
+    }
 }
 
 data class Settings(
@@ -97,6 +131,8 @@ object SettingsJson {
         put("mapVariant", p.mapVariant)
         put("lastTuned", p.lastTuned)
         put("lastCalibrated", p.lastCalibrated)
+        put("darken", p.darken)
+        put("darkenStrength", p.darkenStrength.toDouble())
     }
 
     private fun decodeProfile(o: JSONObject) = Profile(
@@ -107,6 +143,8 @@ object SettingsJson {
         mapVariant = o.optInt("mapVariant", 1).coerceIn(0, 2),
         lastTuned = o.optLong("lastTuned", 0L),
         lastCalibrated = o.optLong("lastCalibrated", 0L),
+        darken = o.optBoolean("darken", false),
+        darkenStrength = o.optDouble("darkenStrength", 0.3).toFloat().coerceIn(0f, Profile.MAX_DARKEN),
     )
 
     fun encodeParams(p: EdgeParams): JSONObject = JSONObject().apply {

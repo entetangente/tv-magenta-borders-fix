@@ -28,6 +28,22 @@ class SettingsJsonTest {
     }
 
     @Test
+    fun darkenModeRoundTripAndRendersOnlyBlack() {
+        val s = Settings().withCurrent { it.withMode(CorrectionMode.DARKEN).copy(darkenStrength = 0.4f) }
+        val back = SettingsJson.decode(SettingsJson.encode(s))
+        assertEquals(CorrectionMode.DARKEN, back.current.mode)
+        assertEquals(0.4f, back.current.darkenStrength, 1e-6f)
+        val px = de.edgefix.core.EdgeMaskRenderer.render(back.current.darkenParams(), 320, 180)
+        // Rand abgedunkelt, aber ohne jede Farbe (Schwarz bleibt schwarz)
+        org.junit.Assert.assertTrue(px.any { it != 0 })
+        org.junit.Assert.assertTrue(px.all { (it and 0xffffff) == 0 })
+        // Mitte unverändert
+        assertEquals(0, px[90 * 320 + 160])
+        // Zurück zu Farbausgleich: Karte bleibt unberührt, Modus wechselt
+        assertEquals(CorrectionMode.COLOR, back.current.withMode(CorrectionMode.COLOR).mode)
+    }
+
+    @Test
     fun migratesVersion1ToBothProfiles() {
         val v1 = """{"version":1,"enabled":true,"autostart":false,"setupDone":true,"lastTuned":5,
             "params":{"aMax":0.2,"k":0.4,"hueDeg":80,"curve":"LINEAR"},
